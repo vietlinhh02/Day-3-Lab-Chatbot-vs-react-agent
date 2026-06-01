@@ -48,6 +48,99 @@ CONFIRMATION_WORDS = {
     "hủy đi",
     "sua di",
     "sửa đi",
+    "ok",
+    "duoc",
+    "được",
+    "chap nhan",
+    "chấp nhận",
+}
+
+
+TOOL_DESCRIPTIONS = {
+    "Search_HR_Policy": (
+        "Tìm kiếm chính sách nhân sự trong sổ tay công ty. "
+        "Sử dụng khi người dùng hỏi về quy định, chính sách, quy trình HR. "
+        "Input: {\"query\": \"câu hỏi về chính sách\", \"top_k\": 3}"
+    ),
+    "Check_Leave_Balance": (
+        "Kiểm tra số ngày phép còn lại của nhân viên (phép năm, phép ốm). "
+        "Sử dụng khi người dùng hỏi về ngày phép hoặc trước khi tạo đơn xin nghỉ. "
+        "Input: {\"employee_id\": \"E001\" hoặc \"current_user\"}"
+    ),
+    "Calculate_Leave_Days": (
+        "Tính số ngày nghỉ (bao gồm ngày làm việc, cuối tuần) cho một khoảng thời gian. "
+        "Sử dụng trước khi tạo đơn để thông báo số ngày thực tế. "
+        "Input: {\"employee_id\": \"E001\", \"start_date\": \"2026-06-08\", \"end_date\": \"2026-06-09\"}"
+    ),
+    "Create_Leave_Request": (
+        "Tạo đơn xin nghỉ phép mới. PHẢI hỏi xác nhận trước khi gọi. "
+        "Các loại nghỉ: sick_leave (ốm), annual_leave (phép năm), unpaid_leave (không lương). "
+        "Input: {\"employee_id\": \"E001\", \"type\": \"sick_leave\", "
+        "\"start_date\": \"2026-06-08\", \"end_date\": \"2026-06-09\", "
+        "\"reason\": \"Sốt cao\", \"confirmed\": true}"
+    ),
+    "Get_Leave_Request": (
+        "Xem chi tiết một đơn xin nghỉ theo mã đơn. "
+        "Input: {\"request_id\": \"LR-1024\"}"
+    ),
+    "List_Leave_Requests": (
+        "Liệt kê danh sách đơn xin nghỉ của nhân viên, có thể lọc theo trạng thái. "
+        "Trạng thái: draft, submitted, approved, rejected, cancelled, all. "
+        "Input: {\"employee_id\": \"E001\", \"status\": \"all\"}"
+    ),
+    "Update_Leave_Request": (
+        "Cập nhật đơn xin nghỉ (ngày, lý do, loại nghỉ). "
+        "Chỉ sửa được đơn ở trạng thái draft hoặc submitted. PHẢI hỏi xác nhận. "
+        "Input: {\"request_id\": \"LR-1024\", \"patch\": {\"end_date\": \"2026-06-10\"}, \"confirmed\": true}"
+    ),
+    "Cancel_Leave_Request": (
+        "Hủy đơn xin nghỉ phép. Chỉ hủy được đơn ở trạng thái draft hoặc submitted. PHẢI hỏi xác nhận. "
+        "Input: {\"request_id\": \"LR-1024\", \"reason\": \"Đã khỏi bệnh\", \"confirmed\": true}"
+    ),
+    "Create_Employee": (
+        "Tạo hồ sơ nhân viên mới. Chỉ HR admin được phép. PHẢI hỏi xác nhận. "
+        "Input: {\"actor_employee_id\": \"HR001\", \"full_name\": \"Nguyễn Văn An\", "
+        "\"email\": \"an@example.com\", \"role\": \"employee\", "
+        "\"department\": \"Engineering\", \"position\": \"Backend Developer\", "
+        "\"manager_id\": \"M001\", \"annual_leave_remaining\": 12, "
+        "\"sick_leave_remaining\": 5, \"confirmed\": true}"
+    ),
+    "Get_Employee": (
+        "Xem hồ sơ nhân viên. Nhân viên chỉ xem được hồ sơ của mình, "
+        "manager xem được nhân viên trong team, HR xem được tất cả. "
+        "Input: {\"actor_employee_id\": \"current_user\", \"employee_id\": \"E001\"}"
+    ),
+    "Search_Employees": (
+        "Tìm kiếm nhân viên theo tên, email, phòng ban hoặc trạng thái. "
+        "Chỉ manager và HR admin được phép. "
+        "Input: {\"actor_employee_id\": \"HR001\", \"query\": \"An\", "
+        "\"department\": \"Engineering\", \"status\": \"active\"}"
+    ),
+    "Update_Employee": (
+        "Cập nhật hồ sơ nhân viên (tên, email, role, phòng ban, vị trí, quản lý). "
+        "Chỉ HR admin được phép. PHẢI hỏi xác nhận. "
+        "Input: {\"actor_employee_id\": \"HR001\", \"employee_id\": \"E001\", "
+        "\"patch\": {\"position\": \"Senior Developer\"}, \"confirmed\": true}"
+    ),
+    "Deactivate_Employee": (
+        "Khóa tài khoản nhân viên (chuyển trạng thái inactive). "
+        "Chỉ HR admin được phép. PHẢI hỏi xác nhận. "
+        "Input: {\"actor_employee_id\": \"HR001\", \"employee_id\": \"E001\", "
+        "\"reason\": \"Nghỉ việc\", \"confirmed\": true}"
+    ),
+    "Activate_Employee": (
+        "Mở khóa tài khoản nhân viên (chuyển trạng thái active). "
+        "Chỉ HR admin được phép. PHẢI hỏi xác nhận. "
+        "Input: {\"actor_employee_id\": \"HR001\", \"employee_id\": \"E001\", "
+        "\"reason\": \"Quay lại làm việc\", \"confirmed\": true}"
+    ),
+    "Update_Leave_Balance": (
+        "Cập nhật số ngày phép năm và phép ốm của nhân viên. "
+        "Chỉ HR admin được phép. PHẢI hỏi xác nhận. "
+        "Input: {\"actor_employee_id\": \"HR001\", \"employee_id\": \"E001\", "
+        "\"annual_leave_remaining\": 10, \"sick_leave_remaining\": 5, "
+        "\"reason\": \"Điều chỉnh theo hợp đồng mới\", \"confirmed\": true}"
+    ),
 }
 
 
@@ -152,12 +245,11 @@ class ReActAgent:
     ) -> list[Tool]:
         tools = []
         for tool_name, raw_tool in self.raw_tools.items():
+            description = TOOL_DESCRIPTIONS.get(tool_name, raw_tool.description)
             tools.append(
                 Tool.from_function(
                     name=tool_name,
-                    description=(
-                        f"{raw_tool.description} Input must be a JSON object string."
-                    ),
+                    description=description,
                     func=self._tool_runner(tool_name, session_state, role, trace),
                 )
             )
@@ -225,39 +317,73 @@ class ReActAgent:
             return observation.get("message", "Thao tác không thành công.")
         if pending["tool"] == "Create_Leave_Request":
             return (
-                f"Mình đã tạo xong đơn xin nghỉ cho bạn (Mã đơn: "
-                f"{observation.get('request_id')}). Trạng thái: {observation.get('status')}."
+                f"Mình đã tạo xong đơn xin nghỉ cho bạn.\n\n"
+                f"**Mã đơn:** {observation.get('request_id')}\n"
+                f"**Trạng thái:** {observation.get('status')}\n"
+                f"**Số ngày làm việc:** {observation.get('working_days')}\n\n"
+                f"Đơn đã được gửi đến quản lý trực tiếp."
             )
         if pending["tool"] == "Cancel_Leave_Request":
-            return f"Mình đã hủy đơn {observation.get('request_id')}."
+            return f"Mình đã hủy đơn {observation.get('request_id')} thành công."
         if pending["tool"] == "Update_Leave_Request":
-            return f"Mình đã cập nhật đơn {observation.get('request_id')}."
+            fields = observation.get("updated_fields", [])
+            return (
+                f"Mình đã cập nhật đơn {observation.get('request_id')}.\n"
+                f"**Các trường đã sửa:** {', '.join(fields)}"
+            )
         if pending["tool"] == "Create_Employee":
-            return f"Mình đã tạo hồ sơ nhân viên {observation.get('employee_id')}."
+            emp = observation.get("item", {})
+            return (
+                f"Mình đã tạo hồ sơ nhân viên mới.\n\n"
+                f"**Mã nhân viên:** {observation.get('employee_id')}\n"
+                f"**Họ tên:** {emp.get('full_name')}\n"
+                f"**Phòng ban:** {emp.get('department')}\n"
+                f"**Vị trí:** {emp.get('position')}"
+            )
+        if pending["tool"] == "Update_Employee":
+            fields = observation.get("updated_fields", [])
+            return (
+                f"Mình đã cập nhật hồ sơ nhân viên {observation.get('employee_id')}.\n"
+                f"**Các trường đã sửa:** {', '.join(fields)}"
+            )
+        if pending["tool"] == "Deactivate_Employee":
+            return f"Đã khóa tài khoản nhân viên {observation.get('employee_id')}."
+        if pending["tool"] == "Activate_Employee":
+            return f"Đã mở khóa tài khoản nhân viên {observation.get('employee_id')}."
+        if pending["tool"] == "Update_Leave_Balance":
+            return (
+                f"Đã cập nhật ngày phép cho nhân viên {observation.get('employee_id')}.\n"
+                f"**Phép năm:** {observation.get('annual_leave_remaining')}\n"
+                f"**Phép ốm:** {observation.get('sick_leave_remaining')}"
+            )
         return "Mình đã thực hiện xong thay đổi theo xác nhận của bạn."
 
     def _prompt_template(self) -> PromptTemplate:
         return PromptTemplate.from_template(
-            """Answer in Vietnamese. You have access to these tools:
+            """Bạn là trợ lý HR AI. Trả lời bằng tiếng Việt có dấu.
 
+Bạn có các công cụ sau:
 {tools}
 
-Use this format:
+Định dạng bắt buộc:
 
-Question: the input question
-Thought: what you should do next
-Action: one of [{tool_names}]
-Action Input: a JSON object string
-Observation: the result of the action
-... repeat Thought/Action/Action Input/Observation as needed
-Thought: I now know the final answer
-Final Answer: the final answer in Vietnamese
+Question: câu hỏi của người dùng
+Thought: suy nghĩ về bước tiếp theo
+Action: một trong [{tool_names}]
+Action Input: chuỗi JSON
+Observation: kết quả từ công cụ
+... lặp lại Thought/Action/Action Input/Observation nếu cần
+Thought: Tôi đã có đủ thông tin để trả lời
+Final Answer: câu trả lời cuối cùng bằng tiếng Việt
 
-Important:
-- If an Observation says requires_confirmation=true, return that message as the Final Answer.
-- Do not call write tools again after a confirmation-required Observation.
+Quy tắc quan trọng:
+- Nếu Observation có requires_confirmation=true, trả về message đó làm Final Answer.
+- Không gọi công cụ ghi sau khi nhận được yêu cầu xác nhận.
+- Luôn sử dụng tools khi câu hỏi liên quan đến chính sách, nhân viên, phép nghỉ.
+- Không tự suy đoán thông tin, phải dùng tools để lấy dữ liệu thực.
+- Khi người dùng xác nhận (có, đồng ý, ok...), thực hiện pending_action đã lưu.
 
-Previous conversation:
+Cuộc trò chuyện trước:
 {chat_history}
 
 Question: {input}
@@ -265,19 +391,30 @@ Thought:{agent_scratchpad}"""
         )
 
     def _system_prompt(self, employee_id: str, role: str) -> str:
-        return f"""You are Proactive HR & Workflow Agent.
-Current employee_id: {employee_id}
-Current role: {role}
+        return f"""Bạn là Proactive HR & Workflow Agent - trợ lý AI quản lý nhân sự.
 
-Rules:
-- Do not invent HR policy, employee profile, leave balance, or leave-request status.
-- Use tools when the answer depends on HR policy, employee profile, leave balance,
-  or leave-request workflow.
-- Ask for explicit confirmation before creating, updating, or cancelling a leave
-  request or employee profile.
-- Only hr_admin can create, update, deactivate, activate employees, or update leave balances.
-- If the user confirms a previously proposed write action, reuse pending action details.
-- Return Final Answer when no more tool calls are needed."""
+Thông tin người dùng hiện tại:
+- Mã nhân viên: {employee_id}
+- Vai trò: {role}
+
+Nhiệm vụ:
+1. Trả lời câu hỏi về chính sách nhân sự (nghỉ phép, quy định, quy trình)
+2. Kiểm tra và thông báo số ngày phép còn lại
+3. Tạo, xem, sửa, hủy đơn xin nghỉ phép
+4. Quản lý hồ sơ nhân viên (tạo, xem, tìm kiếm, cập nhật, khóa/mở khóa)
+5. Cập nhật số ngày phép cho nhân viên
+
+Quy tắc bắt buộc:
+- KHÔNG tự bịa thông tin về chính sách, hồ sơ nhân viên, ngày phép hoặc trạng thái đơn.
+- PHẢI dùng tools khi câu hỏi liên quan đến dữ liệu nhân sự.
+- PHẢI hỏi xác nhận trước khi thực hiện thao tác ghi (tạo, sửa, hủy).
+- Chỉ hr_admin mới được tạo, sửa, khóa/mở khóa nhân viên và cập nhật ngày phép.
+- Nếu người dùng xác nhận thao tác trước đó, thực hiện pending_action đã lưu.
+- Trả lời Final Answer khi không cần gọi thêm tools nào nữa.
+- Nếu RAG không tìm thấy chính sách, nói rõ không tìm thấy thay vì tự suy đoán.
+
+Phát hiện xác nhận:
+Các từ xác nhận: có, đồng ý, đúng rồi, tạo đi, hủy đi, sửa đi, ok, được, chấp nhận."""
 
     def _build_user_prompt(
         self,
@@ -285,13 +422,13 @@ Rules:
         employee_id: str,
         history: list[dict[str, str]] | None,
     ) -> str:
-        return f"User employee_id: {employee_id}\nUser message: {user_input}"
+        return f"Mã nhân viên: {employee_id}\nTin nhắn: {user_input}"
 
     def _format_history(self, history: list[dict[str, str]] | None) -> str:
         if not history:
             return ""
         return "\n".join(
-            f"User: {item['user']}\nAssistant: {item['assistant']}" for item in history[-6:]
+            f"Người dùng: {item['user']}\nTrợ lý: {item['assistant']}" for item in history[-6:]
         )
 
     def _parse_tool_input(self, tool_input: str) -> dict[str, Any]:
@@ -307,16 +444,60 @@ Rules:
             return parsed if isinstance(parsed, dict) else {}
 
     def _confirmation_message(self, tool_name: str, args: dict[str, Any]) -> str:
-        payload = json.dumps(args, ensure_ascii=False)
         if tool_name == "Create_Leave_Request":
             return (
-                "Mình sẽ tạo đơn xin nghỉ với thông tin "
-                f"{payload}. Bạn xác nhận tạo đơn này không?"
+                f"Mình sẽ tạo đơn xin nghỉ với thông tin:\n"
+                f"- Loại nghỉ: {args.get('type', '')}\n"
+                f"- Từ ngày: {args.get('start_date', '')}\n"
+                f"- Đến ngày: {args.get('end_date', '')}\n"
+                f"- Lý do: {args.get('reason', '')}\n\n"
+                f"Bạn xác nhận tạo đơn này không?"
             )
         if tool_name == "Update_Leave_Request":
-            return f"Mình sẽ cập nhật đơn xin nghỉ với thông tin {payload}. Bạn xác nhận không?"
+            patch = args.get("patch", {})
+            changes = "\n".join(f"- {k}: {v}" for k, v in patch.items())
+            return f"Mình sẽ cập nhật đơn {args.get('request_id', '')}:\n{changes}\n\nBạn xác nhận không?"
         if tool_name == "Cancel_Leave_Request":
-            return f"Mình sẽ hủy đơn xin nghỉ với thông tin {payload}. Bạn xác nhận không?"
+            return (
+                f"Mình sẽ hủy đơn {args.get('request_id', '')}.\n"
+                f"Lý do: {args.get('reason', '')}\n\n"
+                f"Bạn xác nhận hủy đơn này không?"
+            )
+        if tool_name == "Create_Employee":
+            return (
+                f"Mình sẽ tạo hồ sơ nhân viên mới:\n"
+                f"- Họ tên: {args.get('full_name', '')}\n"
+                f"- Email: {args.get('email', '')}\n"
+                f"- Phòng ban: {args.get('department', '')}\n"
+                f"- Vị trí: {args.get('position', '')}\n"
+                f"- Quản lý: {args.get('manager_id', 'Không có')}\n\n"
+                f"Bạn xác nhận tạo hồ sơ này không?"
+            )
+        if tool_name == "Update_Employee":
+            patch = args.get("patch", {})
+            changes = "\n".join(f"- {k}: {v}" for k, v in patch.items())
+            return f"Mình sẽ cập nhật hồ sơ nhân viên {args.get('employee_id', '')}:\n{changes}\n\nBạn xác nhận không?"
+        if tool_name == "Deactivate_Employee":
+            return (
+                f"Mình sẽ khóa tài khoản nhân viên {args.get('employee_id', '')}.\n"
+                f"Lý do: {args.get('reason', '')}\n\n"
+                f"Bạn xác nhận khóa tài khoản này không?"
+            )
+        if tool_name == "Activate_Employee":
+            return (
+                f"Mình sẽ mở khóa tài khoản nhân viên {args.get('employee_id', '')}.\n"
+                f"Lý do: {args.get('reason', '')}\n\n"
+                f"Bạn xác nhận mở khóa tài khoản này không?"
+            )
+        if tool_name == "Update_Leave_Balance":
+            return (
+                f"Mình sẽ cập nhật ngày phép cho nhân viên {args.get('employee_id', '')}:\n"
+                f"- Phép năm: {args.get('annual_leave_remaining', '')}\n"
+                f"- Phép ốm: {args.get('sick_leave_remaining', '')}\n"
+                f"- Lý do: {args.get('reason', '')}\n\n"
+                f"Bạn xác nhận cập nhật không?"
+            )
+        payload = json.dumps(args, ensure_ascii=False)
         return f"Mình sẽ thực hiện thao tác {tool_name} với thông tin {payload}. Bạn xác nhận không?"
 
     def _is_confirmation(self, user_input: str) -> bool:

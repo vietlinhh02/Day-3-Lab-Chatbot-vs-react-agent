@@ -1,10 +1,21 @@
 from datetime import date
 
-from app.tools import leave_request_tools as tools
+from app.tools.tools import (
+    check_leave_balance,
+    calculate_leave_days,
+    create_leave_request,
+    get_leave_request,
+    list_leave_requests,
+    update_leave_request,
+    cancel_leave_request,
+    get_leave_request_tools,
+    LeaveRequestPatch,
+    LEAVE_REQUEST_LOG_PATH,
+)
 
 
 def test_check_leave_balance():
-    result = tools.check_leave_balance("current_user")
+    result = check_leave_balance("current_user")
 
     assert result["ok"] is True
     assert result["employee_id"] == "E001"
@@ -13,7 +24,7 @@ def test_check_leave_balance():
 
 
 def test_calculate_leave_days_excludes_weekends():
-    result = tools.calculate_leave_days("current_user", date(2026, 6, 8), date(2026, 6, 14))
+    result = calculate_leave_days("current_user", date(2026, 6, 8), date(2026, 6, 14))
 
     assert result["ok"] is True
     assert result["total_calendar_days"] == 7
@@ -22,9 +33,9 @@ def test_calculate_leave_days_excludes_weekends():
 
 
 def test_create_requires_confirmation(tmp_path, monkeypatch):
-    monkeypatch.setattr(tools, "LEAVE_REQUEST_LOG_PATH", tmp_path / "leave_requests.jsonl")
+    monkeypatch.setattr("app.tools.tools.LEAVE_REQUEST_LOG_PATH", tmp_path / "leave_requests.jsonl")
 
-    result = tools.create_leave_request(
+    result = create_leave_request(
         employee_id="current_user",
         type="sick_leave",
         start_date=date(2026, 6, 8),
@@ -37,14 +48,14 @@ def test_create_requires_confirmation(tmp_path, monkeypatch):
 
 
 def test_create_get_update_cancel_leave_request(tmp_path, monkeypatch):
-    monkeypatch.setattr(tools, "LEAVE_REQUEST_LOG_PATH", tmp_path / "leave_requests.jsonl")
+    monkeypatch.setattr("app.tools.tools.LEAVE_REQUEST_LOG_PATH", tmp_path / "leave_requests.jsonl")
 
-    created = tools.create_leave_request(
+    created = create_leave_request(
         employee_id="current_user",
         type="sick_leave",
         start_date=date(2026, 6, 8),
         end_date=date(2026, 6, 9),
-        reason="Sick",
+        reason="Sốt cao",
         confirmed=True,
         confirmation_source="test",
     )
@@ -53,26 +64,26 @@ def test_create_get_update_cancel_leave_request(tmp_path, monkeypatch):
     assert created["ok"] is True
     assert created["status"] == "submitted"
 
-    found = tools.get_leave_request(request_id)
+    found = get_leave_request(request_id)
     assert found["ok"] is True
     assert found["item"]["request_id"] == request_id
 
-    listed = tools.list_leave_requests("current_user", "submitted")
+    listed = list_leave_requests("current_user", "submitted")
     assert listed["ok"] is True
     assert [item["request_id"] for item in listed["items"]] == [request_id]
 
-    updated = tools.update_leave_request(
+    updated = update_leave_request(
         request_id=request_id,
-        patch=tools.LeaveRequestPatch(end_date=date(2026, 6, 10), reason="Need one more day"),
+        patch=LeaveRequestPatch(end_date=date(2026, 6, 10), reason="Cần thêm một ngày"),
         confirmed=True,
         confirmation_source="test",
     )
     assert updated["ok"] is True
     assert updated["updated_fields"] == ["end_date", "reason"]
 
-    cancelled = tools.cancel_leave_request(
+    cancelled = cancel_leave_request(
         request_id=request_id,
-        reason="Recovered",
+        reason="Đã khỏi bệnh",
         confirmed=True,
         confirmation_source="test",
     )
@@ -81,7 +92,7 @@ def test_create_get_update_cancel_leave_request(tmp_path, monkeypatch):
 
 
 def test_exports_langchain_tools():
-    exported = tools.get_leave_request_tools()
+    exported = get_leave_request_tools()
 
     assert [tool.name for tool in exported] == [
         "Check_Leave_Balance",
