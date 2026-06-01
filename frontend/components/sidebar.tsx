@@ -13,6 +13,7 @@ import {
   ListChecks,
   ChartLineUp,
 } from "phosphor-react";
+import { getDicebearAvatar } from "@/lib/avatar";
 
 const navItems = [
   { href: "/dashboard", icon: House, label: "Tổng quan" },
@@ -30,6 +31,7 @@ const bottomItems = [
 interface SidebarProps {
   user: {
     full_name: string;
+    email: string;
     role: string;
     department: string;
   };
@@ -38,6 +40,7 @@ interface SidebarProps {
 
 export function Sidebar({ user, onLogout }: SidebarProps) {
   const pathname = usePathname();
+  const avatarUrl = getDicebearAvatar(user.email);
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -92,9 +95,11 @@ export function Sidebar({ user, onLogout }: SidebarProps) {
         {/* User info & logout */}
         <div className="mt-2 pt-3 border-t border-[#16181c]">
           <div className="flex items-center gap-3 px-3 py-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0052ff] text-xs font-semibold">
-              {user.full_name.charAt(0)}
-            </div>
+            <img
+              src={avatarUrl}
+              alt={user.full_name}
+              className="h-8 w-8 rounded-full bg-[#16181c]"
+            />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white truncate">
                 {user.full_name}

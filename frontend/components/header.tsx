@@ -2,16 +2,20 @@
 
 import { Bell, MagnifyingGlass } from "phosphor-react";
 import { Input } from "@/components/ui/input";
+import { getDicebearAvatar } from "@/lib/avatar";
 
 interface HeaderProps {
   title: string;
   user: {
     full_name: string;
+    email: string;
     role: string;
   };
 }
 
 export function Header({ title, user }: HeaderProps) {
+  const avatarUrl = getDicebearAvatar(user.email);
+
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[#eef0f3] bg-white/80 backdrop-blur-sm px-8">
       <h1 className="text-lg font-semibold text-[#0a0b0d] tracking-tight">
@@ -39,9 +43,11 @@ export function Header({ title, user }: HeaderProps) {
 
         {/* User avatar */}
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0052ff] text-xs font-semibold text-white">
-            {user.full_name.charAt(0)}
-          </div>
+          <img
+            src={avatarUrl}
+            alt={user.full_name}
+            className="h-8 w-8 rounded-full bg-[#eef0f3]"
+          />
           <span className="text-sm font-medium text-[#0a0b0d]">
             {user.full_name}
           </span>
