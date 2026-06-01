@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +15,8 @@ import {
   BookOpen,
   CalendarBlank,
   Users,
+  Copy,
+  Check,
 } from "phosphor-react";
 import { getDicebearAvatar } from "@/lib/avatar";
 import { sendChatMessageStream, StreamEvent } from "@/lib/api";
@@ -48,6 +52,25 @@ const quickActions = [
   { icon: Users, label: "Thông tin nhân viên", prompt: "Tìm thông tin nhân viên" },
   { icon: Lightning, label: "Kiểm tra phép", prompt: "Kiểm tra số ngày phép còn lại" },
 ];
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="absolute top-2 right-2 p-1.5 rounded-lg bg-[#f7f7f7] text-[#7c828a] hover:text-[#0a0b0d] opacity-0 group-hover:opacity-100 transition-opacity"
+    >
+      {copied ? <Check size={14} /> : <Copy size={14} />}
+    </button>
+  );
+}
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -286,20 +309,107 @@ export default function ChatPage() {
                   </div>
                 )}
 
-                <div
-                  className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                    msg.role === "user"
-                      ? "bg-[#0052ff] text-white rounded-br-md"
-                      : "bg-white text-[#0a0b0d] rounded-bl-md border border-[#eef0f3]"
-                  }`}
-                >
-                  <div className="whitespace-pre-wrap">
-                    {msg.content}
+                {msg.role === "user" ? (
+                  <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed bg-[#0052ff] text-white rounded-br-md">
+                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                  </div>
+                ) : (
+                  <div className="group relative rounded-2xl px-4 py-3 text-sm leading-relaxed bg-white text-[#0a0b0d] rounded-bl-md border border-[#eef0f3]">
+                    <CopyButton text={msg.content} />
+                    <div className="markdown-body">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          h1: ({ children }) => (
+                            <h1 className="text-xl font-bold mb-2 text-[#0a0b0d]">{children}</h1>
+                          ),
+                          h2: ({ children }) => (
+                            <h2 className="text-lg font-semibold mb-2 text-[#0a0b0d]">{children}</h2>
+                          ),
+                          h3: ({ children }) => (
+                            <h3 className="text-base font-semibold mb-1 text-[#0a0b0d]">{children}</h3>
+                          ),
+                          p: ({ children }) => (
+                            <p className="mb-2 last:mb-0">{children}</p>
+                          ),
+                          ul: ({ children }) => (
+                            <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>
+                          ),
+                          ol: ({ children }) => (
+                            <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>
+                          ),
+                          li: ({ children }) => (
+                            <li className="text-[#0a0b0d]">{children}</li>
+                          ),
+                          strong: ({ children }) => (
+                            <strong className="font-semibold text-[#0a0b0d]">{children}</strong>
+                          ),
+                          em: ({ children }) => (
+                            <em className="italic">{children}</em>
+                          ),
+                          code: ({ children, className }) => {
+                            const isInline = !className;
+                            if (isInline) {
+                              return (
+                                <code className="bg-[#f7f7f7] px-1.5 py-0.5 rounded text-xs font-mono text-[#0052ff]">
+                                  {children}
+                                </code>
+                              );
+                            }
+                            return (
+                              <code className="block bg-[#0a0b0d] text-[#eef0f3] p-3 rounded-lg text-xs font-mono overflow-x-auto">
+                                {children}
+                              </code>
+                            );
+                          },
+                          pre: ({ children }) => (
+                            <pre className="mb-2 rounded-lg overflow-hidden">{children}</pre>
+                          ),
+                          blockquote: ({ children }) => (
+                            <blockquote className="border-l-4 border-[#0052ff] pl-4 py-1 mb-2 bg-[#eef4ff] rounded-r-lg">
+                              {children}
+                            </blockquote>
+                          ),
+                          table: ({ children }) => (
+                            <div className="overflow-x-auto mb-2">
+                              <table className="min-w-full border-collapse border border-[#eef0f3]">
+                                {children}
+                              </table>
+                            </div>
+                          ),
+                          th: ({ children }) => (
+                            <th className="border border-[#eef0f3] px-3 py-2 bg-[#f7f7f7] text-left font-semibold text-sm">
+                              {children}
+                            </th>
+                          ),
+                          td: ({ children }) => (
+                            <td className="border border-[#eef0f3] px-3 py-2 text-sm">
+                              {children}
+                            </td>
+                          ),
+                          hr: () => (
+                            <hr className="border-[#eef0f3] my-4" />
+                          ),
+                          a: ({ href, children }) => (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[#0052ff] hover:underline"
+                            >
+                              {children}
+                            </a>
+                          ),
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
                     {msg.isStreaming && (
                       <span className="inline-block w-2 h-4 bg-[#7c828a] ml-1 animate-pulse" />
                     )}
                   </div>
-                </div>
+                )}
 
                 <p
                   className={`text-xs text-[#7c828a] ${
