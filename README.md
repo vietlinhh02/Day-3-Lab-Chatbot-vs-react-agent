@@ -19,61 +19,123 @@ Hướng triển khai đề xuất:
 
 Bắt đầu từ: [`docs/README.md`](docs/README.md).
 
+## Cấu trúc thư mục
+
+```
+app/
+├── main.py                 # FastAPI app entry point
+├── config.py               # Settings (pydantic-settings, đọc .env)
+├── api/
+│   ├── router.py           # Gộp tất cả routers
+│   └── endpoints/
+│       ├── chat.py         # POST /chat, POST /chat/stream (SSE), GET /chat/{id}/history
+│       └── health.py       # GET /health
+├── core/
+│   ├── llm_provider.py     # Abstract base class
+│   ├── openai_provider.py  # OpenAI implementation
+│   └── ollama_provider.py  # Ollama HTTP API
+├── agent/
+│   └── react_agent.py      # ReAct agent logic
+├── models/
+│   └── schemas.py          # Pydantic request/response models
+└── telemetry/
+    ├── logger.py           # Structured JSON logger
+    └── metrics.py          # Performance tracker
+```
+
 ## Cài đặt môi trường
 
-Copy `.env.example` sang `.env` và điền API keys nếu dùng provider cloud:
+### 1. Copy `.env.example` sang `.env`
 
 ```bash
 cp .env.example .env
 ```
 
-Cài dependencies:
+Điền API key nếu dùng OpenAI, hoặc để trống nếu chỉ dùng Ollama.
+
+### 2. Cài dependencies bằng uv
 
 ```bash
-pip install -r requirements.txt
+uv venv
+uv pip install -r requirements.txt
 ```
 
-Extension point cho tool nằm tại:
+Hoặc install cả dev dependencies (pytest, ruff):
 
-```text
-src/tools/
+```bash
+uv pip install -e ".[dev]"
 ```
 
-## Chạy model local bằng CPU
+## Chạy server
 
-Nếu không muốn dùng OpenAI hoặc Gemini, bạn có thể chạy model local bằng
-`llama-cpp-python`.
+```bash
+uv run python run.py
+```
 
-### 1. Tải model
+Server sẽ chạy tại `http://localhost:8000`.
 
-Tải **Phi-3-mini-4k-instruct-q4.gguf** từ Hugging Face:
+Swagger UI (API docs): `http://localhost:8000/docs`
 
-- [Phi-3-mini-4k-instruct-GGUF](https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf)
-- Tải file `phi-3-mini-4k-instruct-q4.gguf` từ trang model.
+## API Endpoints
 
-### 2. Đặt model vào project
+| Method | Path | Mô tả |
+|--------|------|-------|
+| `POST` | `/chat` | Gửi message, nhận response |
+| `POST` | `/chat/stream` | SSE streaming response |
+| `GET` | `/chat/{session_id}/history` | Lịch sử chat của session |
+| `GET` | `/sessions` | Danh sách tất cả sessions |
+| `GET` | `/health` | Kiểm tra trạng thái providers |
 
-Tạo thư mục `models/` ở root và đặt file `.gguf` vào đó.
+### Ví dụ gọi API
 
-### 3. Cập nhật `.env`
+```bash
+# Chat (OpenAI)
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello!", "provider": "openai"}'
+
+# Chat (Ollama)
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello!", "provider": "ollama"}'
+
+# SSE Streaming
+curl -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello!", "provider": "openai"}'
+```
+
+## Chạy Ollama local
+
+```bash
+# Cài Ollama: https://ollama.com/download
+ollama pull llama3
+ollama serve
+```
+
+Sau đó set trong `.env`:
 
 ```env
-DEFAULT_PROVIDER=local
-LOCAL_MODEL_PATH=./models/Phi-3-mini-4k-instruct-q4.gguf
+DEFAULT_PROVIDER=ollama
+OLLAMA_MODEL=llama3
+```
+
+## Tests
+
+```bash
+uv run pytest tests/ -v
+```
+
+## Lint
+
+```bash
+uv run ruff check app/ tests/
 ```
 
 ## Mục tiêu lab
 
 1. **Baseline Chatbot**: quan sát giới hạn của chatbot khi gặp tác vụ nhiều bước.
 2. **ReAct Loop**: implement chu trình `Thought -> Action -> Observation`.
-3. **Provider Switching**: chuyển giữa OpenAI, Gemini và local provider.
+3. **Provider Switching**: chuyển giữa OpenAI và Ollama.
 4. **Failure Analysis**: dùng structured logs trong `logs/` để tìm lỗi.
 5. **Grading & Bonus**: xem [SCORING.md](SCORING.md) để tối đa điểm.
-
-## Cách dùng skeleton này
-
-Code hiện tại là production prototype ở mức skeleton:
-
-- **Telemetry**: mỗi action được log dạng JSON để phân tích.
-- **Provider Pattern**: dễ mở rộng sang LLM API khác.
-- **Clean Skeletons**: tập trung vào logic ReAct và tool calling.
