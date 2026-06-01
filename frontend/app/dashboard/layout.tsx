@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, createContext, useContext } from "react";
+import { useState, createContext, useContext, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
@@ -40,27 +40,31 @@ export default function DashboardLayout({
     department: string;
     position: string;
   } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // If no user, redirect to login
-  if (!user) {
-    // Check localStorage for user data
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("crewwise_user");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          setUser(parsed);
-          return null;
-        } catch {
-          router.push("/login");
-          return null;
-        }
-      } else {
+  useEffect(() => {
+    const stored = localStorage.getItem("crewwise_user");
+    if (stored) {
+      try {
+        setUser(JSON.parse(stored));
+      } catch {
         router.push("/login");
-        return null;
       }
+    } else {
+      router.push("/login");
     }
-    return null;
+    setIsLoading(false);
+  }, [router]);
+
+  if (isLoading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f7f7f7]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#0052ff] border-t-transparent" />
+          <p className="text-sm text-[#5b616e]">Đang tải...</p>
+        </div>
+      </div>
+    );
   }
 
   const handleLogout = () => {

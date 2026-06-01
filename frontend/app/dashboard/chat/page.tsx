@@ -204,9 +204,11 @@ export default function ChatPage() {
         {/* Chat header */}
         <div className="h-14 px-6 flex items-center justify-between bg-white border-b border-[#eef0f3]">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0052ff]">
-              <Sparkle size={16} className="text-white" />
-            </div>
+            <img
+              src={getDicebearAvatar("crewwise-ai@crewwise.com")}
+              alt="Crewwise AI"
+              className="h-8 w-8 rounded-full bg-[#eef0f3]"
+            />
             <div>
               <p className="text-sm font-semibold text-[#0a0b0d]">
                 Crewwise AI
@@ -234,9 +236,11 @@ export default function ChatPage() {
               }`}
             >
               {msg.role === "assistant" && (
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0052ff]">
-                  <Sparkle size={16} className="text-white" />
-                </div>
+                <img
+                  src={getDicebearAvatar("crewwise-ai@crewwise.com")}
+                  alt="Crewwise AI"
+                  className="h-8 w-8 shrink-0 rounded-full bg-[#eef0f3]"
+                />
               )}
 
               <div
