@@ -1,0 +1,47 @@
+{
+  "employees": [
+    {
+      "employee_id": "E001",
+      "alias": "current_user",
+      "full_name": "Nguyễn Văn An",
+      "email": "an@example.com",
+      "password": "password123",
+      "role": "employee",
+      "department": "Engineering",
+      "position": "Backend Developer",
+      "manager_id": "M001",
+      "manager_email": "manager@example.com",
+      "employment_status": "active",
+      "annual_leave_remaining": 4,
+      "sick_leave_remaining": 5
+    },
+    {
+      "employee_id": "M001",
+      "alias": "demo_manager",
+      "full_name": "Trần Minh Quân",
+      "email": "manager@example.com",
+      "password": "password123",
+      "role": "manager",
+      "department": "Engineering",
+      "position": "Engineering Manager",
+      "manager_id": null,
+      "employment_status": "active",
+      "annual_leave_remaining": 8,
+      "sick_leave_remaining": 5
+    },
+    {
+      "employee_id": "HR001",
+      "alias": "demo_hr",
+      "full_name": "Lê Thị Hương",
+      "email": "hr@example.com",
+      "password": "password123",
+      "role": "hr_admin",
+      "department": "Human Resources",
+      "position": "HR Manager",
+      "manager_id": null,
+      "employment_status": "active",
+      "annual_leave_remaining": 10,
+      "sick_leave_remaining": 5
+    }
+  ]
+}

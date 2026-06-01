@@ -7,3 +7,16 @@ models/
 *.pyc
 .venv/
 venv/
+
+# Node/Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+pnpm-debug.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
