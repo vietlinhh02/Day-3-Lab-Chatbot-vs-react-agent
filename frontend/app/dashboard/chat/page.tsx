@@ -5,20 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
   PaperPlaneRight,
-  Sparkle,
-  User,
-  Clock,
   Plus,
   MagnifyingGlass,
   Trash,
   Archive,
-  DotsThree,
   Lightning,
   BookOpen,
   CalendarBlank,
   Users,
 } from "phosphor-react";
 import { getDicebearAvatar } from "@/lib/avatar";
+import { sendChatMessage, ChatMessage } from "@/lib/api";
 
 interface Message {
   id: number;
@@ -34,81 +31,14 @@ interface Conversation {
   title: string;
   lastMessage: string;
   time: string;
-  unread: number;
 }
 
 const conversations: Conversation[] = [
   {
     id: "1",
-    title: "Xin nghỉ ốm tuần tới",
-    lastMessage: "Mình đã tạo xong đơn xin nghỉ ốm cho bạn...",
-    time: "10:31",
-    unread: 0,
-  },
-  {
-    id: "2",
-    title: "Kiểm tra ngày phép",
-    lastMessage: "Bạn hiện còn 4 ngày phép năm và 5 ngày phép ốm.",
-    time: "Hôm qua",
-    unread: 0,
-  },
-  {
-    id: "3",
-    title: "Chính sách nghỉ lễ",
-    lastMessage: "Theo sổ tay nhân sự, công ty có 11 ngày nghỉ lễ...",
-    time: "2 ngày trước",
-    unread: 0,
-  },
-  {
-    id: "4",
-    title: "Tạo đơn xin nghỉ",
-    lastMessage: "Đơn đã được tạo thành công với mã LR-1020.",
-    time: "1 tuần trước",
-    unread: 0,
-  },
-];
-
-const initialMessages: Message[] = [
-  {
-    id: 1,
-    role: "user",
-    content:
-      "Tôi bị sốt cao, muốn xin nghỉ thứ 2 và thứ 3 tuần tới. Công ty có yêu cầu giấy khám bệnh không?",
-    time: "10:30",
-  },
-  {
-    id: 2,
-    role: "assistant",
-    content: `Theo quy định, vì bạn xin nghỉ 2 ngày nên cần nộp bổ sung giấy khám bệnh để hưởng nguyên lương.
-
-Bạn hiện còn **5 ngày phép ốm** và **4 ngày phép năm**.
-
-Bạn có muốn mình tạo luôn đơn xin nghỉ ốm cho thứ 2 và thứ 3 tuần tới không?`,
-    time: "10:30",
-    thought:
-      "Người dùng cần biết quy định nghỉ ốm và số ngày phép còn lại. Trước tiên cần tra cứu sổ tay nhân sự.",
-    tool: "Search_HR_Policy",
-  },
-  {
-    id: 3,
-    role: "user",
-    content: "Có, tạo giúp tôi.",
-    time: "10:31",
-  },
-  {
-    id: 4,
-    role: "assistant",
-    content: `Mình đã tạo xong đơn xin nghỉ ốm cho bạn.
-
-**Mã đơn:** LR-1024
-**Loại nghỉ:** Nghỉ ốm
-**Thời gian:** 08/06/2026 - 09/06/2026
-**Trạng thái:** Chờ duyệt
-
-Đơn đã được gửi đến quản lý trực tiếp. Chúc bạn mau khỏe!`,
-    time: "10:31",
-    thought: "Người dùng đã xác nhận, tạo đơn xin nghỉ ốm.",
-    tool: "Create_Leave_Request",
+    title: "Cuộc trò chuyện mới",
+    lastMessage: "Bắt đầu trò chuyện với AI...",
+    time: "Vừa xong",
   },
 ];
 
@@ -120,14 +50,16 @@ const quickActions = [
 ];
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [activeConvo, setActiveConvo] = useState("1");
-  const [showThought, setShowThought] = useState<number | null>(null);
+  const [sessionId, setSessionId] = useState<string | undefined>();
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    const newMsg: Message = {
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
+
+    const userMessage: Message = {
       id: messages.length + 1,
       role: "user",
       content: input,
@@ -136,15 +68,55 @@ export default function ChatPage() {
         minute: "2-digit",
       }),
     };
-    setMessages([...messages, newMsg]);
+
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    setIsLoading(true);
+
+    try {
+      const user = JSON.parse(localStorage.getItem("crewwise_user") || "{}");
+      const response = await sendChatMessage(
+        input,
+        sessionId,
+        user.employee_id || "current_user",
+        user.role || "employee"
+      );
+
+      setSessionId(response.session_id);
+
+      const assistantMessage: Message = {
+        id: messages.length + 2,
+        role: "assistant",
+        content: response.response,
+        time: new Date().toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        thought: response.trace?.[0]?.thought,
+        tool: response.trace?.[0]?.tool,
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      const errorMessage: Message = {
+        id: messages.length + 2,
+        role: "assistant",
+        content: "Xin lỗi, có lỗi xảy ra khi xử lý yêu cầu của bạn. Vui lòng thử lại.",
+        time: new Date().toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="flex h-[calc(100vh-128px)] gap-0 rounded-2xl overflow-hidden border border-[#eef0f3]">
       {/* Conversation list */}
       <div className="w-72 shrink-0 bg-white border-r border-[#eef0f3] flex flex-col">
-        {/* Search */}
         <div className="p-4 border-b border-[#eef0f3]">
           <div className="relative">
             <MagnifyingGlass
@@ -158,18 +130,20 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* New chat button */}
         <div className="p-3">
           <Button
             variant="outline"
             className="w-full rounded-lg h-10 border-[#dee1e6] text-[#0a0b0d] font-medium text-sm"
+            onClick={() => {
+              setMessages([]);
+              setSessionId(undefined);
+            }}
           >
             <Plus size={16} className="mr-2" />
             Cuộc trò chuyện mới
           </Button>
         </div>
 
-        {/* Conversations */}
         <div className="flex-1 overflow-y-auto">
           {conversations.map((convo) => (
             <button
@@ -228,6 +202,23 @@ export default function ChatPage() {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <img
+                src={getDicebearAvatar("crewwise-ai@crewwise.com")}
+                alt="Crewwise AI"
+                className="h-16 w-16 rounded-full bg-[#eef0f3] mb-4"
+              />
+              <h3 className="text-lg font-semibold text-[#0a0b0d] mb-2">
+                Xin chào! Mình là Crewwise AI
+              </h3>
+              <p className="text-sm text-[#5b616e] max-w-md">
+                Mình có thể giúp bạn kiểm tra ngày phép, tạo đơn xin nghỉ,
+                tìm kiếm chính sách và quản lý công việc. Hãy hỏi mình nhé!
+              </p>
+            </div>
+          )}
+
           {messages.map((msg) => (
             <div
               key={msg.id}
@@ -248,37 +239,14 @@ export default function ChatPage() {
                   msg.role === "user" ? "order-first" : ""
                 }`}
               >
-                {/* Tool call indicator */}
                 {msg.tool && (
-                  <button
-                    onClick={() =>
-                      setShowThought(showThought === msg.id ? null : msg.id)
-                    }
-                    className="flex items-center gap-2 text-xs text-[#7c828a] hover:text-[#0a0b0d] transition-colors"
-                  >
-                    <Clock size={12} />
+                  <div className="flex items-center gap-2 text-xs text-[#7c828a]">
                     <span className="font-mono bg-white px-2 py-1 rounded-md border border-[#eef0f3]">
                       {msg.tool}
                     </span>
-                    {msg.thought && (
-                      <span className="text-[#0052ff]">
-                        {showThought === msg.id ? "Ẩn" : "Xem"} suy nghĩ
-                      </span>
-                    )}
-                  </button>
-                )}
-
-                {/* Thought bubble */}
-                {showThought === msg.id && msg.thought && (
-                  <div className="rounded-lg bg-[#fef9e7] border border-[#f4b000]/20 p-3 text-xs text-[#5b616e] italic">
-                    <span className="font-semibold text-[#f4b000] not-italic">
-                      Thought:
-                    </span>{" "}
-                    {msg.thought}
                   </div>
                 )}
 
-                {/* Message bubble */}
                 <div
                   className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                     msg.role === "user"
@@ -300,13 +268,34 @@ export default function ChatPage() {
 
               {msg.role === "user" && (
                 <img
-                  src={getDicebearAvatar("an@example.com")}
+                  src={getDicebearAvatar(
+                    JSON.parse(
+                      localStorage.getItem("crewwise_user") || '{"email":"user@example.com"}'
+                    ).email
+                  )}
                   alt="User"
                   className="h-8 w-8 shrink-0 rounded-full bg-[#eef0f3]"
                 />
               )}
             </div>
           ))}
+
+          {isLoading && (
+            <div className="flex gap-3">
+              <img
+                src={getDicebearAvatar("crewwise-ai@crewwise.com")}
+                alt="Crewwise AI"
+                className="h-8 w-8 shrink-0 rounded-full bg-[#eef0f3]"
+              />
+              <div className="bg-white rounded-2xl rounded-bl-md border border-[#eef0f3] px-4 py-3">
+                <div className="flex gap-1">
+                  <div className="h-2 w-2 bg-[#7c828a] rounded-full animate-bounce" />
+                  <div className="h-2 w-2 bg-[#7c828a] rounded-full animate-bounce delay-100" />
+                  <div className="h-2 w-2 bg-[#7c828a] rounded-full animate-bounce delay-200" />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Quick actions */}
@@ -334,10 +323,11 @@ export default function ChatPage() {
               placeholder="Nhập tin nhắn..."
               className="flex-1 h-11 rounded-xl border-[#dee1e6] bg-white"
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              disabled={isLoading}
             />
             <Button
               onClick={handleSend}
-              disabled={!input.trim()}
+              disabled={!input.trim() || isLoading}
               className="h-11 w-11 rounded-xl bg-[#0052ff] hover:bg-[#003ecc] p-0 disabled:opacity-50"
             >
               <PaperPlaneRight size={18} className="text-white" />

@@ -170,3 +170,60 @@ export async function deleteTask(
     method: "DELETE",
   });
 }
+
+// Dashboard
+export interface DashboardStats {
+  total_employees: number;
+  pending_leaves: number;
+  total_tasks: number;
+  done_tasks: number;
+  departments: Record<string, number>;
+  leave_by_status: Record<string, number>;
+  task_by_status: Record<string, number>;
+}
+
+export interface Activity {
+  type: string;
+  action: string;
+  employee_id: string;
+  time: string;
+}
+
+export async function getDashboardStats(): Promise<DashboardStats> {
+  return fetchAPI<DashboardStats>("/dashboard/stats");
+}
+
+export async function getRecentActivities(): Promise<Activity[]> {
+  const data = await fetchAPI<{ activities: Activity[] }>("/dashboard/recent-activities");
+  return data.activities;
+}
+
+// Chat
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatResponse {
+  response: string;
+  session_id: string;
+  requires_confirmation: boolean;
+  trace: any[];
+}
+
+export async function sendChatMessage(
+  message: string,
+  sessionId?: string,
+  employeeId: string = "current_user",
+  role: string = "employee"
+): Promise<ChatResponse> {
+  return fetchAPI<ChatResponse>("/chat", {
+    method: "POST",
+    body: JSON.stringify({
+      message,
+      session_id: sessionId,
+      employee_id: employeeId,
+      role,
+    }),
+  });
+}
