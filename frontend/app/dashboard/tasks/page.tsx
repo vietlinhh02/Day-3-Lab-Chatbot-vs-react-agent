@@ -11,9 +11,9 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  useDroppable,
   DragStartEvent,
   DragEndEvent,
-  DragOverEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -31,8 +31,6 @@ import {
   CalendarBlank,
   Tag,
   DotsSixVertical,
-  User,
-  ArrowRight,
 } from "phosphor-react";
 import { getDicebearAvatar } from "@/lib/avatar";
 
@@ -143,48 +141,46 @@ const initialTasks: Task[] = [
 
 const statusConfig: Record<
   TaskStatus,
-  { label: string; icon: typeof Circle; color: string; bg: string; border: string }
+  { label: string; icon: typeof Circle; color: string; bg: string }
 > = {
-  todo: {
-    label: "Cần làm",
-    icon: Circle,
-    color: "#7c828a",
-    bg: "#f7f7f7",
-    border: "#eef0f3",
-  },
-  in_progress: {
-    label: "Đang làm",
-    icon: Clock,
-    color: "#0052ff",
-    bg: "#eef4ff",
-    border: "#b6d4fe",
-  },
-  review: {
-    label: "Review",
-    icon: Clock,
-    color: "#f4b000",
-    bg: "#fef9e7",
-    border: "#fde68a",
-  },
-  done: {
-    label: "Hoàn thành",
-    icon: CheckCircle,
-    color: "#05b169",
-    bg: "#edfaf3",
-    border: "#a7f3d0",
-  },
+  todo: { label: "Cần làm", icon: Circle, color: "#7c828a", bg: "#f7f7f7" },
+  in_progress: { label: "Đang làm", icon: Clock, color: "#0052ff", bg: "#eef4ff" },
+  review: { label: "Review", icon: Clock, color: "#f4b000", bg: "#fef9e7" },
+  done: { label: "Hoàn thành", icon: CheckCircle, color: "#05b169", bg: "#edfaf3" },
 };
 
-const priorityConfig: Record<
-  string,
-  { label: string; color: string; bg: string }
-> = {
+const priorityConfig: Record<string, { label: string; color: string; bg: string }> = {
   low: { label: "Thấp", color: "#7c828a", bg: "#f7f7f7" },
   medium: { label: "TB", color: "#f4b000", bg: "#fef9e7" },
   high: { label: "Cao", color: "#cf202f", bg: "#fef0f0" },
 };
 
 const columns: TaskStatus[] = ["todo", "in_progress", "review", "done"];
+
+function DroppableColumn({
+  status,
+  children,
+}: {
+  status: TaskStatus;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: status });
+  const config = statusConfig[status];
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="min-h-[200px] space-y-3 rounded-xl p-2 transition-colors"
+      style={{
+        backgroundColor: isOver ? config.bg : "transparent",
+        outline: isOver ? `2px dashed ${config.color}` : "none",
+        outlineOffset: "-2px",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
 function SortableTaskCard({ task }: { task: Task }) {
   const {
@@ -199,7 +195,7 @@ function SortableTaskCard({ task }: { task: Task }) {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.4 : 1,
   };
 
   const priority = priorityConfig[task.priority];
@@ -269,7 +265,7 @@ function TaskCardOverlay({ task }: { task: Task }) {
   const priority = priorityConfig[task.priority];
 
   return (
-    <div className="rounded-xl bg-white border border-[#0052ff] shadow-lg p-4 space-y-3 w-[280px] rotate-2">
+    <div className="rounded-xl bg-white border-2 border-[#0052ff] shadow-2xl p-4 space-y-3 w-[280px] rotate-3">
       <div className="flex items-start justify-between">
         <span className="text-xs font-mono text-[#7c828a]">{task.id}</span>
         <span
@@ -279,26 +275,16 @@ function TaskCardOverlay({ task }: { task: Task }) {
           {priority.label}
         </span>
       </div>
-
       <h4 className="text-sm font-medium text-[#0a0b0d] leading-snug">
         {task.title}
       </h4>
-
-      <div className="flex items-center justify-between pt-2 border-t border-[#eef0f3]">
-        <div className="flex items-center gap-2">
-          <img
-            src={getDicebearAvatar(task.assigneeEmail)}
-            alt={task.assignee}
-            className="h-6 w-6 rounded-full bg-[#f7f7f7]"
-          />
-          <span className="text-xs text-[#5b616e]">
-            {task.assignee.split(" ").pop()}
-          </span>
-        </div>
-        <div className="flex items-center gap-1 text-xs text-[#7c828a]">
-          <CalendarBlank size={12} />
-          {task.dueDate.slice(5)}
-        </div>
+      <div className="flex items-center gap-2 pt-2 border-t border-[#eef0f3]">
+        <img
+          src={getDicebearAvatar(task.assigneeEmail)}
+          alt={task.assignee}
+          className="h-5 w-5 rounded-full bg-[#f7f7f7]"
+        />
+        <span className="text-xs text-[#5b616e]">{task.assignee}</span>
       </div>
     </div>
   );
@@ -310,9 +296,7 @@ export default function TasksPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor)
   );
 
@@ -337,42 +321,26 @@ export default function TasksPage() {
     const activeTask = tasks.find((t) => t.id === active.id);
     if (!activeTask) return;
 
+    const overId = over.id as string;
+
     // Check if dropped on a column
-    const isColumn = columns.includes(over.id as TaskStatus);
-    if (isColumn) {
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === active.id ? { ...t, status: over.id as TaskStatus } : t
-        )
-      );
+    if (columns.includes(overId as TaskStatus)) {
+      if (activeTask.status !== overId) {
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === active.id ? { ...t, status: overId as TaskStatus } : t
+          )
+        );
+      }
       return;
     }
 
-    // Check if dropped on another task
-    const overTask = tasks.find((t) => t.id === over.id);
-    if (!overTask) return;
-
-    if (activeTask.status !== overTask.status) {
+    // Dropped on another task - move to that task's column
+    const overTask = tasks.find((t) => t.id === overId);
+    if (overTask && activeTask.status !== overTask.status) {
       setTasks((prev) =>
         prev.map((t) =>
           t.id === active.id ? { ...t, status: overTask.status } : t
-        )
-      );
-    }
-  }
-
-  function handleDragOver(event: DragOverEvent) {
-    const { active, over } = event;
-    if (!over) return;
-
-    const activeTask = tasks.find((t) => t.id === active.id);
-    if (!activeTask) return;
-
-    const isColumn = columns.includes(over.id as TaskStatus);
-    if (isColumn && activeTask.status !== over.id) {
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === active.id ? { ...t, status: over.id as TaskStatus } : t
         )
       );
     }
@@ -386,9 +354,7 @@ export default function TasksPage() {
           <h2 className="text-2xl font-semibold text-[#0a0b0d] tracking-tight">
             Công việc
           </h2>
-          <p className="text-[#5b616e] mt-1">
-            Kéo thả để thay đổi trạng thái
-          </p>
+          <p className="text-[#5b616e] mt-1">Kéo thả để thay đổi trạng thái</p>
         </div>
         <Button className="rounded-full bg-[#0052ff] text-white font-semibold hover:bg-[#003ecc]">
           <Plus size={18} className="mr-1" />
@@ -434,7 +400,6 @@ export default function TasksPage() {
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
-        onDragOver={handleDragOver}
       >
         <div className="grid grid-cols-4 gap-5">
           {columns.map((col) => {
@@ -452,10 +417,7 @@ export default function TasksPage() {
                     className="h-2 w-2 rounded-full"
                     style={{ backgroundColor: status.color }}
                   />
-                  <span
-                    className="text-sm font-semibold"
-                    style={{ color: status.color }}
-                  >
+                  <span className="text-sm font-semibold" style={{ color: status.color }}>
                     {status.label}
                   </span>
                   <span className="ml-auto text-xs font-medium px-2 py-0.5 rounded-full bg-white/80 text-[#5b616e]">
@@ -464,23 +426,16 @@ export default function TasksPage() {
                 </div>
 
                 {/* Column content */}
-                <SortableContext
-                  items={columnTasks.map((t) => t.id)}
-                  strategy={verticalListSortingStrategy}
-                  id={col}
-                >
-                  <div
-                    id={col}
-                    className="min-h-[200px] space-y-3 rounded-xl p-2 transition-colors"
-                    style={{
-                      backgroundColor: activeId ? status.bg + "40" : "transparent",
-                    }}
+                <DroppableColumn status={col}>
+                  <SortableContext
+                    items={columnTasks.map((t) => t.id)}
+                    strategy={verticalListSortingStrategy}
                   >
                     {columnTasks.map((task) => (
                       <SortableTaskCard key={task.id} task={task} />
                     ))}
-                  </div>
-                </SortableContext>
+                  </SortableContext>
+                </DroppableColumn>
               </div>
             );
           })}
