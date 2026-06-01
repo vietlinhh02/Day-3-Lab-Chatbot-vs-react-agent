@@ -68,7 +68,7 @@ class OllamaProvider(LLMProvider):
             "stream": stream,
             "think": False,  # Disable thinking mode for faster responses
             "options": {
-                "num_predict": 512,  # Limit response length
+                "num_predict": 2048,  # Max response tokens
                 "temperature": 0.7,
             },
         }
