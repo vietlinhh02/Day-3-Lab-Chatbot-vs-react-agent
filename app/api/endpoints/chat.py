@@ -10,6 +10,7 @@ from app.config import settings
 from app.core.llm_provider import LLMProvider
 from app.core.openai_provider import OpenAIProvider
 from app.core.ollama_provider import OllamaProvider
+from app.core.deepseek_provider import DeepSeekProvider
 from app.models.schemas import ChatRequest, ChatResponse, SessionInfo
 from app.telemetry.metrics import tracker
 from app.tools import get_leave_request_tools, get_user_management_tools, get_task_tools
@@ -43,6 +44,12 @@ def _get_provider(provider_name: str | None = None, model: str | None = None) ->
         return OllamaProvider(
             model_name=model or settings.OLLAMA_MODEL,
             base_url=settings.OLLAMA_BASE_URL,
+        )
+    elif name == "deepseek":
+        return DeepSeekProvider(
+            model_name=model or settings.DEEPSEEK_MODEL,
+            api_key=settings.DEEPSEEK_API_KEY,
+            base_url=settings.DEEPSEEK_BASE_URL,
         )
     raise HTTPException(status_code=400, detail=f"Unknown provider: {name}")
 
