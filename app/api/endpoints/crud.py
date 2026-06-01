@@ -1,13 +1,42 @@
 import json
+from datetime import datetime
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-
-from app.database import get_db
-from app.models.db_models import Employee, LeaveRequest, Task
+from pathlib import Path
 
 router = APIRouter()
+
+EMPLOYEE_DATA_PATH = Path("frontend/data/employees.json")
+LEAVE_REQUEST_PATH = Path("app/data/leave_requests.jsonl")
+TASK_DATA_PATH = Path("app/data/tasks.jsonl")
+
+
+def _load_json(path: Path, default: Any) -> Any:
+    if not path.exists():
+        return default
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    items = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            items.append(json.loads(line))
+    return items
+
+
+def _write_jsonl(path: Path, items: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in items)
+    path.write_text(content, encoding="utf-8")
 
 
 class LoginRequest(BaseModel):
@@ -36,9 +65,6 @@ class EmployeeResponse(BaseModel):
     annual_leave_remaining: int
     sick_leave_remaining: int
 
-    class Config:
-        from_attributes = True
-
 
 class LeaveRequestResponse(BaseModel):
     request_id: str
@@ -49,23 +75,6 @@ class LeaveRequestResponse(BaseModel):
     reason: str
     status: str
     created_at: str | None = None
-
-    class Config:
-        from_attributes = True
-
-    @classmethod
-    def from_orm(cls, obj):
-        data = {
-            "request_id": obj.request_id,
-            "employee_id": obj.employee_id,
-            "type": obj.type,
-            "start_date": obj.start_date,
-            "end_date": obj.end_date,
-            "reason": obj.reason,
-            "status": obj.status,
-            "created_at": obj.created_at.isoformat() if obj.created_at else None,
-        }
-        return cls(**data)
 
 
 class TaskResponse(BaseModel):
@@ -79,25 +88,6 @@ class TaskResponse(BaseModel):
     due_date: str
     tags: str
     created_at: str | None = None
-
-    class Config:
-        from_attributes = True
-
-    @classmethod
-    def from_orm(cls, obj):
-        data = {
-            "task_id": obj.task_id,
-            "title": obj.title,
-            "description": obj.description,
-            "status": obj.status,
-            "priority": obj.priority,
-            "assignee_id": obj.assignee_id,
-            "creator_id": obj.creator_id,
-            "due_date": obj.due_date,
-            "tags": obj.tags,
-            "created_at": obj.created_at.isoformat() if obj.created_at else None,
-        }
-        return cls(**data)
 
 
 class CreateTaskRequest(BaseModel):
@@ -134,167 +124,232 @@ class UpdateLeaveRequest(BaseModel):
     reason: str | None = None
 
 
-# Auth
 @router.post("/auth/login", response_model=LoginResponse)
-def login(req: LoginRequest, db: Session = Depends(get_db)):
-    employee = db.query(Employee).filter(Employee.email == req.email).first()
-    if not employee or employee.password != req.password:
-        raise HTTPException(status_code=401, detail="Email hoặc mật khẩu không đúng")
-    return LoginResponse(
-        employee_id=employee.employee_id,
-        full_name=employee.full_name,
-        email=employee.email,
-        role=employee.role,
-        department=employee.department,
-        position=employee.position,
-    )
+def login(req: LoginRequest):
+    employees = _load_json(EMPLOYEE_DATA_PATH, {"employees": []}).get("employees", [])
+    for emp in employees:
+        if emp.get("email") == req.email and emp.get("password") == req.password:
+            return LoginResponse(
+                employee_id=emp["employee_id"],
+                full_name=emp["full_name"],
+                email=emp["email"],
+                role=emp["role"],
+                department=emp["department"],
+                position=emp["position"],
+            )
+    raise HTTPException(status_code=401, detail="Email hoặc mật khẩu không đúng")
 
 
-# Employees
 @router.get("/employees", response_model=list[EmployeeResponse])
-def list_employees(
-    department: str | None = None,
-    status: str | None = None,
-    db: Session = Depends(get_db),
-):
-    query = db.query(Employee)
-    if department:
-        query = query.filter(Employee.department == department)
-    if status:
-        query = query.filter(Employee.employment_status == status)
-    return query.all()
+def list_employees(department: str | None = None, status: str | None = None):
+    employees = _load_json(EMPLOYEE_DATA_PATH, {"employees": []}).get("employees", [])
+    result = []
+    for emp in employees:
+        if department and emp.get("department") != department:
+            continue
+        if status and emp.get("employment_status") != status:
+            continue
+        result.append(EmployeeResponse(
+            employee_id=emp["employee_id"],
+            full_name=emp["full_name"],
+            email=emp["email"],
+            role=emp["role"],
+            department=emp["department"],
+            position=emp["position"],
+            manager_id=emp.get("manager_id"),
+            employment_status=emp.get("employment_status", "active"),
+            annual_leave_remaining=emp.get("annual_leave_remaining", 0),
+            sick_leave_remaining=emp.get("sick_leave_remaining", 0),
+        ))
+    return result
 
 
 @router.get("/employees/{employee_id}", response_model=EmployeeResponse)
-def get_employee(employee_id: str, db: Session = Depends(get_db)):
-    emp = db.query(Employee).filter(Employee.employee_id == employee_id).first()
-    if not emp:
-        raise HTTPException(status_code=404, detail="Không tìm thấy nhân viên")
-    return emp
+def get_employee(employee_id: str):
+    employees = _load_json(EMPLOYEE_DATA_PATH, {"employees": []}).get("employees", [])
+    for emp in employees:
+        if emp.get("employee_id") == employee_id or emp.get("alias") == employee_id:
+            return EmployeeResponse(
+                employee_id=emp["employee_id"],
+                full_name=emp["full_name"],
+                email=emp["email"],
+                role=emp["role"],
+                department=emp["department"],
+                position=emp["position"],
+                manager_id=emp.get("manager_id"),
+                employment_status=emp.get("employment_status", "active"),
+                annual_leave_remaining=emp.get("annual_leave_remaining", 0),
+                sick_leave_remaining=emp.get("sick_leave_remaining", 0),
+            )
+    raise HTTPException(status_code=404, detail="Không tìm thấy nhân viên")
 
 
-# Leave Requests
 @router.get("/leave-requests", response_model=list[LeaveRequestResponse])
-def list_leave_requests(
-    employee_id: str | None = None,
-    status: str | None = None,
-    db: Session = Depends(get_db),
-):
-    query = db.query(LeaveRequest)
-    if employee_id:
-        query = query.filter(LeaveRequest.employee_id == employee_id)
-    if status:
-        query = query.filter(LeaveRequest.status == status)
-    results = query.all()
-    return [LeaveRequestResponse.from_orm(r) for r in results]
+def list_leave_requests(employee_id: str | None = None, status: str | None = None):
+    requests = _load_jsonl(LEAVE_REQUEST_PATH)
+    result = []
+    for req in requests:
+        if employee_id and req.get("employee_id") != employee_id:
+            continue
+        if status and req.get("status") != status:
+            continue
+        result.append(LeaveRequestResponse(
+            request_id=req["request_id"],
+            employee_id=req["employee_id"],
+            type=req["type"],
+            start_date=req["start_date"],
+            end_date=req["end_date"],
+            reason=req["reason"],
+            status=req["status"],
+            created_at=req.get("created_at"),
+        ))
+    return result
 
 
 @router.post("/leave-requests", response_model=LeaveRequestResponse)
-def create_leave_request(req: CreateLeaveRequest, db: Session = Depends(get_db)):
-    last = db.query(LeaveRequest).order_by(LeaveRequest.id.desc()).first()
-    new_id = f"LR-{last.id + 1:04d}" if last else "LR-0001"
-    leave = LeaveRequest(
-        request_id=new_id,
-        employee_id=req.employee_id,
-        type=req.type,
-        start_date=req.start_date,
-        end_date=req.end_date,
-        reason=req.reason,
-        status="submitted",
-    )
-    db.add(leave)
-    db.commit()
-    db.refresh(leave)
-    return LeaveRequestResponse.from_orm(leave)
+def create_leave_request(req: CreateLeaveRequest):
+    requests = _load_jsonl(LEAVE_REQUEST_PATH)
+    now = datetime.now().isoformat(timespec="seconds")
+    new_id = f"LR-{1024 + len(requests)}"
+    leave = {
+        "request_id": new_id,
+        "employee_id": req.employee_id,
+        "type": req.type,
+        "start_date": req.start_date,
+        "end_date": req.end_date,
+        "reason": req.reason,
+        "status": "submitted",
+        "created_at": now,
+        "updated_at": now,
+    }
+    requests.append(leave)
+    _write_jsonl(LEAVE_REQUEST_PATH, requests)
+    return LeaveRequestResponse(**leave)
 
 
 @router.patch("/leave-requests/{request_id}")
-def update_leave_request(
-    request_id: str, req: UpdateLeaveRequest, db: Session = Depends(get_db)
-):
-    leave = db.query(LeaveRequest).filter(LeaveRequest.request_id == request_id).first()
-    if not leave:
-        raise HTTPException(status_code=404, detail="Không tìm thấy đơn")
-    if req.status:
-        leave.status = req.status
-    if req.start_date:
-        leave.start_date = req.start_date
-    if req.end_date:
-        leave.end_date = req.end_date
-    if req.reason:
-        leave.reason = req.reason
-    db.commit()
-    return {"request_id": request_id, "status": leave.status}
+def update_leave_request(request_id: str, req: UpdateLeaveRequest):
+    requests = _load_jsonl(LEAVE_REQUEST_PATH)
+    for leave in requests:
+        if leave.get("request_id") == request_id:
+            if req.status:
+                leave["status"] = req.status
+            if req.start_date:
+                leave["start_date"] = req.start_date
+            if req.end_date:
+                leave["end_date"] = req.end_date
+            if req.reason:
+                leave["reason"] = req.reason
+            leave["updated_at"] = datetime.now().isoformat(timespec="seconds")
+            _write_jsonl(LEAVE_REQUEST_PATH, requests)
+            return {"request_id": request_id, "status": leave["status"]}
+    raise HTTPException(status_code=404, detail="Không tìm thấy đơn")
 
 
-# Tasks
 @router.get("/tasks", response_model=list[TaskResponse])
-def list_tasks(
-    assignee_id: str | None = None,
-    status: str | None = None,
-    db: Session = Depends(get_db),
-):
-    query = db.query(Task)
-    if assignee_id:
-        query = query.filter(Task.assignee_id == assignee_id)
-    if status:
-        query = query.filter(Task.status == status)
-    results = query.all()
-    return [TaskResponse.from_orm(r) for r in results]
+def list_tasks(assignee_id: str | None = None, status: str | None = None):
+    tasks = _load_jsonl(TASK_DATA_PATH)
+    result = []
+    for task in tasks:
+        if assignee_id and task.get("assignee_id") != assignee_id:
+            continue
+        if status and task.get("status") != status:
+            continue
+        tags = task.get("tags", "")
+        if isinstance(tags, list):
+            tags = json.dumps(tags, ensure_ascii=False)
+        result.append(TaskResponse(
+            task_id=task["task_id"],
+            title=task["title"],
+            description=task.get("description", ""),
+            status=task["status"],
+            priority=task.get("priority", "medium"),
+            assignee_id=task["assignee_id"],
+            creator_id=task.get("creator_id", ""),
+            due_date=task.get("due_date", ""),
+            tags=tags,
+            created_at=task.get("created_at"),
+        ))
+    return result
 
 
 @router.post("/tasks", response_model=TaskResponse)
-def create_task(creator_id: str, req: CreateTaskRequest, db: Session = Depends(get_db)):
-    last = db.query(Task).order_by(Task.id.desc()).first()
-    new_id = f"T-{last.id + 1:03d}" if last else "T-001"
-    task = Task(
-        task_id=new_id,
-        title=req.title,
-        description=req.description,
-        priority=req.priority,
-        assignee_id=req.assignee_id,
-        creator_id=creator_id,
-        due_date=req.due_date,
-        tags=json.dumps(req.tags, ensure_ascii=False),
-        status="todo",
-    )
-    db.add(task)
-    db.commit()
-    db.refresh(task)
-    return TaskResponse.from_orm(task)
+def create_task(creator_id: str, req: CreateTaskRequest):
+    tasks = _load_jsonl(TASK_DATA_PATH)
+    max_id = 0
+    for task in tasks:
+        task_id = str(task.get("task_id", ""))
+        if task_id.startswith("T-") and task_id[2:].isdigit():
+            max_id = max(max_id, int(task_id[2:]))
+    new_id = f"T-{max_id + 1:03d}"
+    now = datetime.now().isoformat(timespec="seconds")
+    task = {
+        "task_id": new_id,
+        "title": req.title,
+        "description": req.description,
+        "status": "todo",
+        "priority": req.priority,
+        "assignee_id": req.assignee_id,
+        "creator_id": creator_id,
+        "due_date": req.due_date,
+        "tags": json.dumps(req.tags, ensure_ascii=False),
+        "created_at": now,
+        "updated_at": now,
+    }
+    tasks.append(task)
+    _write_jsonl(TASK_DATA_PATH, tasks)
+    return TaskResponse(**task)
 
 
 @router.patch("/tasks/{task_id}", response_model=TaskResponse)
-def update_task(
-    task_id: str, req: UpdateTaskRequest, db: Session = Depends(get_db)
-):
-    task = db.query(Task).filter(Task.task_id == task_id).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="Không tìm thấy công việc")
-    if req.title is not None:
-        task.title = req.title
-    if req.description is not None:
-        task.description = req.description
-    if req.status is not None:
-        task.status = req.status
-    if req.priority is not None:
-        task.priority = req.priority
-    if req.assignee_id is not None:
-        task.assignee_id = req.assignee_id
-    if req.due_date is not None:
-        task.due_date = req.due_date
-    if req.tags is not None:
-        task.tags = json.dumps(req.tags, ensure_ascii=False)
-    db.commit()
-    db.refresh(task)
-    return TaskResponse.from_orm(task)
+def update_task(task_id: str, req: UpdateTaskRequest):
+    tasks = _load_jsonl(TASK_DATA_PATH)
+    for task in tasks:
+        if task.get("task_id") == task_id:
+            if req.title is not None:
+                task["title"] = req.title
+            if req.description is not None:
+                task["description"] = req.description
+            if req.status is not None:
+                task["status"] = req.status
+            if req.priority is not None:
+                task["priority"] = req.priority
+            if req.assignee_id is not None:
+                task["assignee_id"] = req.assignee_id
+            if req.due_date is not None:
+                task["due_date"] = req.due_date
+            if req.tags is not None:
+                task["tags"] = json.dumps(req.tags, ensure_ascii=False)
+            task["updated_at"] = datetime.now().isoformat(timespec="seconds")
+            _write_jsonl(TASK_DATA_PATH, tasks)
+            tags = task.get("tags", "")
+            if isinstance(tags, list):
+                tags = json.dumps(tags, ensure_ascii=False)
+            return TaskResponse(
+                task_id=task["task_id"],
+                title=task["title"],
+                description=task.get("description", ""),
+                status=task["status"],
+                priority=task.get("priority", "medium"),
+                assignee_id=task["assignee_id"],
+                creator_id=task.get("creator_id", ""),
+                due_date=task.get("due_date", ""),
+                tags=tags,
+                created_at=task.get("created_at"),
+            )
+    raise HTTPException(status_code=404, detail="Không tìm thấy công việc")
 
 
 @router.delete("/tasks/{task_id}")
-def delete_task(task_id: str, db: Session = Depends(get_db)):
-    task = db.query(Task).filter(Task.task_id == task_id).first()
-    if not task:
+def delete_task(task_id: str):
+    tasks = _load_jsonl(TASK_DATA_PATH)
+    found = False
+    for task in tasks:
+        if task.get("task_id") == task_id:
+            found = True
+            break
+    if not found:
         raise HTTPException(status_code=404, detail="Không tìm thấy công việc")
-    db.delete(task)
-    db.commit()
+    tasks = [t for t in tasks if t.get("task_id") != task_id]
+    _write_jsonl(TASK_DATA_PATH, tasks)
     return {"task_id": task_id, "deleted": True}

@@ -42,6 +42,22 @@
       "employment_status": "active",
       "annual_leave_remaining": 10,
       "sick_leave_remaining": 5
+    },
+    {
+      "employee_id": "E002",
+      "alias": null,
+      "full_name": "Nguyen Van Test",
+      "email": "test2@vinuni.edu.vn",
+      "role": "employee",
+      "department": "Engineering",
+      "position": "Developer",
+      "manager_id": "M001",
+      "manager_email": "manager@example.com",
+      "employment_status": "active",
+      "annual_leave_remaining": 12,
+      "sick_leave_remaining": 5,
+      "created_at": "2026-06-01T12:26:13.417428+00:00",
+      "updated_at": "2026-06-01T12:26:13.417428+00:00"
     }
   ]
 }

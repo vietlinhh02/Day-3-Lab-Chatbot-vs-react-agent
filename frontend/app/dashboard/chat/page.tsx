@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,8 @@ import {
 } from "phosphor-react";
 import { getDicebearAvatar } from "@/lib/avatar";
 import { sendChatMessageStream, StreamEvent } from "@/lib/api";
+
+const STORAGE_KEY = "crewwise_conversations";
 
 interface ToolCall {
   tool: string;
@@ -42,18 +44,11 @@ interface Message {
 interface Conversation {
   id: string;
   title: string;
+  messages: Message[];
+  sessionId?: string;
   lastMessage: string;
   time: string;
 }
-
-const conversations: Conversation[] = [
-  {
-    id: "1",
-    title: "Cuộc trò chuyện mới",
-    lastMessage: "Bắt đầu trò chuyện với AI...",
-    time: "Vừa xong",
-  },
-];
 
 const quickActions = [
   { icon: CalendarBlank, label: "Xin nghỉ phép", prompt: "Tôi muốn tạo đơn xin nghỉ phép" },
@@ -61,6 +56,30 @@ const quickActions = [
   { icon: Users, label: "Thông tin nhân viên", prompt: "Tìm thông tin nhân viên" },
   { icon: Lightning, label: "Kiểm tra phép", prompt: "Kiểm tra số ngày phép còn lại" },
 ];
+
+function loadConversations(): Conversation[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveConversations(convos: Conversation[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(convos));
+}
+
+function newConversation(): Conversation {
+  return {
+    id: Date.now().toString(),
+    title: "Cuộc trò chuyện mới",
+    messages: [],
+    lastMessage: "Bắt đầu trò chuyện với AI...",
+    time: "Vừa xong",
+  };
+}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -82,64 +101,111 @@ function CopyButton({ text }: { text: string }) {
 }
 
 function formatToolValue(value: unknown): string {
-  if (value === undefined) {
-    return "";
-  }
-
-  if (typeof value === "string") {
-    return value;
-  }
-
+  if (value === undefined) return "";
+  if (typeof value === "string") return value;
   return JSON.stringify(value, null, 2);
 }
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConvoId, setActiveConvoId] = useState<string>("");
   const [input, setInput] = useState("");
-  const [activeConvo, setActiveConvo] = useState("1");
-  const [sessionId, setSessionId] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const convos = loadConversations();
+    if (convos.length === 0) {
+      const fresh = newConversation();
+      setConversations([fresh]);
+      setActiveConvoId(fresh.id);
+    } else {
+      setConversations(convos);
+      setActiveConvoId(convos[0].id);
+    }
+  }, []);
+
+  const activeConvo = conversations.find((c) => c.id === activeConvoId) || conversations[0];
+  const messages = activeConvo?.messages ?? [];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const updateMessage = (messageId: number, updater: (message: Message) => Message) => {
-    setMessages((prev) =>
-      prev.map((message) => (message.id === messageId ? updater(message) : message))
-    );
+  const updateConversation = useCallback(
+    (convoId: string, updater: (c: Conversation) => Conversation) => {
+      setConversations((prev) => {
+        const next = prev.map((c) => (c.id === convoId ? updater(c) : c));
+        saveConversations(next);
+        return next;
+      });
+    },
+    []
+  );
+
+  const updateMessage = useCallback(
+    (convoId: string, messageId: number, updater: (m: Message) => Message) => {
+      updateConversation(convoId, (convo) => ({
+        ...convo,
+        messages: convo.messages.map((m) => (m.id === messageId ? updater(m) : m)),
+      }));
+    },
+    [updateConversation]
+  );
+
+  const handleNewConversation = () => {
+    const fresh = newConversation();
+    const next = [fresh, ...conversations];
+    setConversations(next);
+    setActiveConvoId(fresh.id);
+    saveConversations(next);
+  };
+
+  const handleDeleteConversation = (convoId: string) => {
+    const next = conversations.filter((c) => c.id !== convoId);
+    if (next.length === 0) {
+      const fresh = newConversation();
+      setConversations([fresh]);
+      setActiveConvoId(fresh.id);
+      saveConversations([fresh]);
+    } else {
+      setConversations(next);
+      if (activeConvoId === convoId) setActiveConvoId(next[0].id);
+      saveConversations(next);
+    }
   };
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || !activeConvo) return;
 
     const userMessage: Message = {
       id: Date.now(),
       role: "user",
       content: input,
-      time: new Date().toLocaleTimeString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
     };
 
     const assistantMessage: Message = {
       id: Date.now() + 1,
       role: "assistant",
       content: "",
-      time: new Date().toLocaleTimeString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
       isStreaming: true,
     };
 
-    setMessages((prev) => [...prev, userMessage, assistantMessage]);
+    const convoId = activeConvo.id;
     const currentInput = input;
+
+    updateConversation(convoId, (c) => ({
+      ...c,
+      messages: [...c.messages, userMessage, assistantMessage],
+      title: c.messages.length === 0 ? currentInput.slice(0, 40) : c.title,
+      lastMessage: currentInput.slice(0, 50),
+      time: "Vừa xong",
+    }));
+
     setInput("");
     setIsLoading(true);
-
     setTimeout(scrollToBottom, 100);
 
     try {
@@ -149,13 +215,12 @@ export default function ChatPage() {
         currentInput,
         (event: StreamEvent) => {
           if (event.type === "trace" && event.tool) {
-            const toolName = event.tool;
-            updateMessage(assistantMessage.id, (message) => ({
-              ...message,
+            updateMessage(convoId, assistantMessage.id, (m) => ({
+              ...m,
               toolCalls: [
-                ...(message.toolCalls ?? []),
+                ...(m.toolCalls ?? []),
                 {
-                  tool: toolName,
+                  tool: event.tool!,
                   args: event.args,
                   observation: event.observation,
                   blocked: event.blocked,
@@ -167,25 +232,31 @@ export default function ChatPage() {
           }
 
           if (event.type === "chunk" && event.content) {
-            updateMessage(assistantMessage.id, (message) => ({
-              ...message,
-              content: message.content + event.content,
+            updateMessage(convoId, assistantMessage.id, (m) => ({
+              ...m,
+              content: m.content + event.content,
             }));
             setTimeout(scrollToBottom, 50);
           }
 
           if (event.type === "done") {
-            setSessionId(event.session_id);
-            updateMessage(assistantMessage.id, (message) => ({ ...message, isStreaming: false }));
+            updateConversation(convoId, (c) => ({
+              ...c,
+              sessionId: event.session_id,
+            }));
+            updateMessage(convoId, assistantMessage.id, (m) => ({
+              ...m,
+              isStreaming: false,
+            }));
           }
         },
-        sessionId,
+        activeConvo.sessionId,
         user.employee_id || "current_user",
         user.role || "employee"
       );
-    } catch (error) {
-      updateMessage(assistantMessage.id, (message) => ({
-        ...message,
+    } catch {
+      updateMessage(convoId, assistantMessage.id, (m) => ({
+        ...m,
         content: "Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.",
         isStreaming: false,
       }));
@@ -215,25 +286,23 @@ export default function ChatPage() {
           <Button
             variant="outline"
             className="w-full rounded-lg h-10 border-[#dee1e6] text-[#0a0b0d] font-medium text-sm"
-            onClick={() => {
-              setMessages([]);
-              setSessionId(undefined);
-            }}
+            onClick={handleNewConversation}
           >
             <Plus size={16} className="mr-2" />
             Cuộc trò chuyện mới
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto scrollbar-hide">
           {conversations.map((convo) => (
-            <button
+            <div
               key={convo.id}
-              onClick={() => setActiveConvo(convo.id)}
-              className={`w-full text-left p-4 border-b border-[#eef0f3] transition-colors ${
-                activeConvo === convo.id
-                  ? "bg-[#eef4ff]"
-                  : "hover:bg-[#f7f7f7]"
+              onClick={() => setActiveConvoId(convo.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter") setActiveConvoId(convo.id); }}
+              className={`w-full text-left p-4 border-b border-[#eef0f3] transition-colors group cursor-pointer ${
+                activeConvoId === convo.id ? "bg-[#eef4ff]" : "hover:bg-[#f7f7f7]"
               }`}
             >
               <div className="flex items-start justify-between gap-2">
@@ -245,11 +314,20 @@ export default function ChatPage() {
                     {convo.lastMessage}
                   </p>
                 </div>
-                <span className="text-xs text-[#7c828a] shrink-0">
-                  {convo.time}
-                </span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-xs text-[#7c828a]">{convo.time}</span>
+                   <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteConversation(convo.id);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-[#fee2e2] text-[#7c828a] hover:text-[#cf202f] transition-opacity"
+                  >
+                    <Trash size={12} />
+                  </button>
+                </div>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       </div>
@@ -265,9 +343,7 @@ export default function ChatPage() {
               className="h-8 w-8 rounded-full bg-[#eef0f3]"
             />
             <div>
-              <p className="text-sm font-semibold text-[#0a0b0d]">
-                Crewwise AI
-              </p>
+              <p className="text-sm font-semibold text-[#0a0b0d]">Crewwise AI</p>
               <p className="text-xs text-[#05b169]">Đang hoạt động</p>
             </div>
           </div>
@@ -275,14 +351,17 @@ export default function ChatPage() {
             <button className="flex h-8 w-8 items-center justify-center rounded-lg text-[#7c828a] hover:bg-[#f7f7f7]">
               <Archive size={16} />
             </button>
-            <button className="flex h-8 w-8 items-center justify-center rounded-lg text-[#7c828a] hover:bg-[#f7f7f7]">
+            <button
+              onClick={() => activeConvo && handleDeleteConversation(activeConvo.id)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#7c828a] hover:bg-[#f7f7f7]"
+            >
               <Trash size={16} />
             </button>
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <img
@@ -303,9 +382,7 @@ export default function ChatPage() {
           {messages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex gap-3 ${
-                msg.role === "user" ? "justify-end" : "justify-start"
-              }`}
+              className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
               {msg.role === "assistant" && (
                 <img
@@ -316,9 +393,7 @@ export default function ChatPage() {
               )}
 
               <div
-                className={`max-w-[70%] space-y-2 ${
-                  msg.role === "user" ? "order-first" : ""
-                }`}
+                className={`max-w-[70%] space-y-2 ${msg.role === "user" ? "order-first" : ""}`}
               >
                 {msg.toolCalls && msg.toolCalls.length > 0 && (
                   <div className="space-y-2">
@@ -450,9 +525,7 @@ export default function ChatPage() {
                               {children}
                             </td>
                           ),
-                          hr: () => (
-                            <hr className="border-[#eef0f3] my-4" />
-                          ),
+                          hr: () => <hr className="border-[#eef0f3] my-4" />,
                           a: ({ href, children }) => (
                             <a
                               href={href}
@@ -475,9 +548,7 @@ export default function ChatPage() {
                 )}
 
                 <p
-                  className={`text-xs text-[#7c828a] ${
-                    msg.role === "user" ? "text-right" : ""
-                  }`}
+                  className={`text-xs text-[#7c828a] ${msg.role === "user" ? "text-right" : ""}`}
                 >
                   {msg.time}
                 </p>
@@ -501,7 +572,7 @@ export default function ChatPage() {
 
         {/* Quick actions */}
         <div className="px-6 py-3 bg-white border-t border-[#eef0f3]">
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
             {quickActions.map((action) => (
               <button
                 key={action.label}

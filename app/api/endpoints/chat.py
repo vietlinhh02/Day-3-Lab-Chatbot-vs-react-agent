@@ -1,5 +1,7 @@
 import uuid
 import json
+import queue
+import threading
 from typing import Generator
 
 from fastapi import APIRouter, HTTPException
@@ -117,51 +119,58 @@ def chat_stream(request: ChatRequest):
         max_steps=settings.MAX_AGENT_STEPS,
     )
 
-    def generate() -> Generator[str, None, None]:
-        # Run agent
+    event_queue: queue.Queue = queue.Queue()
+
+    def on_event(event: dict) -> None:
+        event_queue.put(event)
+
+    def run_agent() -> None:
         result = agent.run(
             request.message,
             session_state=session_state[session_id],
             employee_id=request.employee_id,
             role=request.role,
             history=sessions[session_id],
+            on_event=on_event,
         )
+        event_queue.put({"type": "_result", "data": result})
 
-        # Send trace events
-        for step in result.get("trace", []):
-            event_data = {
-                "type": "trace",
-                "tool": step.get("tool", ""),
-                "args": step.get("args", {}),
-                "observation": step.get("observation"),
-                "blocked": step.get("blocked"),
-                "pending_confirmation": step.get("pending_confirmation"),
-                "confirmed": step.get("confirmed"),
+    thread = threading.Thread(target=run_agent, daemon=True)
+    thread.start()
+
+    def generate() -> Generator[str, None, None]:
+        result = None
+        while True:
+            try:
+                event = event_queue.get(timeout=120)
+            except queue.Empty:
+                break
+
+            if event.get("type") == "_result":
+                result = event["data"]
+                break
+
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+        if result:
+            response_text = result["content"]
+            chunk_size = 20
+            for i in range(0, len(response_text), chunk_size):
+                chunk = response_text[i:i + chunk_size]
+                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+
+            done_data = {
+                "type": "done",
+                "session_id": session_id,
+                "requires_confirmation": result["requires_confirmation"],
+                "latency_ms": result["latency_ms"],
             }
-            yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
 
-        # Send response in chunks for streaming effect
-        response_text = result["content"]
-        chunk_size = 20
-        for i in range(0, len(response_text), chunk_size):
-            chunk = response_text[i:i + chunk_size]
-            event_data = {"type": "chunk", "content": chunk}
-            yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
-
-        # Send done event
-        done_data = {
-            "type": "done",
-            "session_id": session_id,
-            "requires_confirmation": result["requires_confirmation"],
-            "latency_ms": result["latency_ms"],
-        }
-        yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
-
-        # Save to session
-        sessions[session_id].append({
-            "user": request.message,
-            "assistant": response_text,
-        })
+            sessions[session_id].append({
+                "user": request.message,
+                "assistant": response_text,
+            })
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 

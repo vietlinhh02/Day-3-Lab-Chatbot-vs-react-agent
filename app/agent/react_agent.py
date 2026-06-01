@@ -58,13 +58,14 @@ class ReActAgent:
 
     def run(self, user_input: str, session_state: dict[str, Any],
             employee_id: str = "current_user", role: str = "employee",
-            history: list[dict[str, str]] | None = None) -> dict[str, Any]:
+            history: list[dict[str, str]] | None = None,
+            on_event: Any = None) -> dict[str, Any]:
         logger.log_event("AGENT_START", {"input": user_input, "model": self.llm.model_name})
         trace: list[dict[str, Any]] = []
         start = time.time()
 
         if self._is_confirmation(user_input) and session_state.get("pending_action"):
-            answer = self._execute_pending_action(session_state, trace)
+            answer = self._execute_pending_action(session_state, trace, on_event)
             return self._build_result(answer, trace, start)
 
         if self._is_simple_greeting(user_input):
@@ -78,6 +79,7 @@ class ReActAgent:
             role=role,
             history=history,
             trace=trace,
+            on_event=on_event,
         )
         requires_confirmation = bool(session_state.get("pending_action"))
 
@@ -92,6 +94,7 @@ class ReActAgent:
         role: str,
         history: list[dict[str, str]] | None,
         trace: list[dict[str, Any]],
+        on_event: Any = None,
     ) -> str:
         scratchpad = ""
         for step in range(1, self.max_steps + 1):
@@ -127,7 +130,7 @@ class ReActAgent:
                 )
                 continue
 
-            observation = self._tool_runner(tool_name, session_state, role, trace)(parsed["action_input"])
+            observation = self._tool_runner(tool_name, session_state, role, trace, on_event)(parsed["action_input"])
             scratchpad += self._format_scratchpad_step(parsed["thought"], tool_name, parsed["action_input"], observation)
 
             if session_state.get("pending_action"):
@@ -140,18 +143,24 @@ class ReActAgent:
         )
 
     def _tool_runner(self, tool_name: str, session_state: dict[str, Any],
-                     role: str, trace: list[dict[str, Any]]):
+                     role: str, trace: list[dict[str, Any]], on_event: Any = None):
         def run(tool_input: str) -> str:
             args = self._parse_tool_input(tool_input)
             if tool_name in HR_ADMIN_TOOLS and role != "hr_admin":
                 observation = {"error": "FORBIDDEN", "message": "Bạn cần quyền hr_admin."}
-                trace.append({"tool": tool_name, "blocked": "FORBIDDEN", "args": args})
+                step = {"tool": tool_name, "blocked": "FORBIDDEN", "args": args}
+                trace.append(step)
+                if on_event:
+                    on_event({"type": "trace", **step})
                 return json.dumps(observation, ensure_ascii=False)
 
             if tool_name in WRITE_TOOLS:
                 session_state["pending_action"] = {"tool": tool_name, "args": args}
                 observation = {"requires_confirmation": True, "message": self._confirmation_message(tool_name, args)}
-                trace.append({"tool": tool_name, "pending_confirmation": True, "args": args})
+                step = {"tool": tool_name, "pending_confirmation": True, "args": args}
+                trace.append(step)
+                if on_event:
+                    on_event({"type": "trace", **step})
                 logger.log_event("AGENT_WAITING_CONFIRMATION", session_state["pending_action"])
                 return json.dumps(observation, ensure_ascii=False)
 
@@ -159,18 +168,24 @@ class ReActAgent:
                 observation = self.raw_tools[tool_name].invoke(args)
             except Exception as e:
                 observation = {"error": "TOOL_ERROR", "message": str(e)}
-            trace.append({"tool": tool_name, "args": args, "observation": observation})
+            step = {"tool": tool_name, "args": args, "observation": observation}
+            trace.append(step)
+            if on_event:
+                on_event({"type": "trace", **step})
             logger.log_event("AGENT_TOOL", {"tool": tool_name, "args": args, "observation": observation})
             return json.dumps(observation, ensure_ascii=False)
         return run
 
-    def _execute_pending_action(self, session_state: dict[str, Any], trace: list[dict[str, Any]]) -> str:
+    def _execute_pending_action(self, session_state: dict[str, Any], trace: list[dict[str, Any]], on_event: Any = None) -> str:
         pending = session_state.pop("pending_action")
+        pending["args"]["confirmed"] = True
         try:
             observation = self.raw_tools[pending["tool"]].invoke(pending["args"])
         except Exception as e:
             observation = {"error": "TOOL_ERROR", "message": str(e)}
         trace.append({"tool": pending["tool"], "args": pending["args"], "observation": observation, "confirmed": True})
+        if on_event:
+            on_event({"type": "trace", **trace[-1]})
         logger.log_event("AGENT_TOOL", trace[-1])
 
         if self._is_failed_observation(observation):
