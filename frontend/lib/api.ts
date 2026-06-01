@@ -218,7 +218,7 @@ export async function sendChatMessage(
   role: string = "employee"
 ): Promise<ChatResponse> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+  const timeout = setTimeout(() => controller.abort(), 120000);
 
   try {
     const res = await fetch(`${API_BASE}/chat`, {
@@ -241,5 +241,67 @@ export async function sendChatMessage(
     return res.json();
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+export interface StreamEvent {
+  type: "trace" | "chunk" | "done";
+  tool?: string;
+  args?: any;
+  content?: string;
+  session_id?: string;
+  requires_confirmation?: boolean;
+  latency_ms?: number;
+}
+
+export async function sendChatMessageStream(
+  message: string,
+  onEvent: (event: StreamEvent) => void,
+  sessionId?: string,
+  employeeId: string = "current_user",
+  role: string = "employee"
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      session_id: sessionId,
+      employee_id: employeeId,
+      role,
+    }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: "Lỗi không xác định" }));
+    throw new Error(error.detail || `HTTP ${res.status}`);
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("No reader");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") return;
+        try {
+          const event = JSON.parse(data) as StreamEvent;
+          onEvent(event);
+        } catch {
+          // Skip invalid JSON
+        }
+      }
+    }
   }
 }

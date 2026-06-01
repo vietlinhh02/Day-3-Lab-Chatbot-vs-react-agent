@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,15 +15,15 @@ import {
   Users,
 } from "phosphor-react";
 import { getDicebearAvatar } from "@/lib/avatar";
-import { sendChatMessage, ChatMessage } from "@/lib/api";
+import { sendChatMessageStream, StreamEvent } from "@/lib/api";
 
 interface Message {
   id: number;
   role: "user" | "assistant";
   content: string;
   time: string;
-  thought?: string;
   tool?: string;
+  isStreaming?: boolean;
 }
 
 interface Conversation {
@@ -55,12 +55,17 @@ export default function ChatPage() {
   const [activeConvo, setActiveConvo] = useState("1");
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
-      id: messages.length + 1,
+      id: Date.now(),
       role: "user",
       content: input,
       time: new Date().toLocaleTimeString("vi-VN", {
@@ -69,45 +74,79 @@ export default function ChatPage() {
       }),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const assistantMessage: Message = {
+      id: Date.now() + 1,
+      role: "assistant",
+      content: "",
+      time: new Date().toLocaleTimeString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      isStreaming: true,
+    };
+
+    setMessages((prev) => [...prev, userMessage, assistantMessage]);
+    const currentInput = input;
     setInput("");
     setIsLoading(true);
 
+    setTimeout(scrollToBottom, 100);
+
     try {
       const user = JSON.parse(localStorage.getItem("crewwise_user") || "{}");
-      const response = await sendChatMessage(
-        input,
+
+      await sendChatMessageStream(
+        currentInput,
+        (event: StreamEvent) => {
+          if (event.type === "trace" && event.tool) {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastMsg = updated[updated.length - 1];
+              if (lastMsg.role === "assistant") {
+                lastMsg.tool = event.tool;
+              }
+              return updated;
+            });
+          }
+
+          if (event.type === "chunk" && event.content) {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastMsg = updated[updated.length - 1];
+              if (lastMsg.role === "assistant") {
+                lastMsg.content += event.content;
+              }
+              return updated;
+            });
+            setTimeout(scrollToBottom, 50);
+          }
+
+          if (event.type === "done") {
+            setSessionId(event.session_id);
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastMsg = updated[updated.length - 1];
+              if (lastMsg.role === "assistant") {
+                lastMsg.isStreaming = false;
+              }
+              return updated;
+            });
+          }
+        },
         sessionId,
         user.employee_id || "current_user",
         user.role || "employee"
       );
-
-      setSessionId(response.session_id);
-
-      const assistantMessage: Message = {
-        id: messages.length + 2,
-        role: "assistant",
-        content: response.response,
-        time: new Date().toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        thought: response.trace?.[0]?.thought,
-        tool: response.trace?.[0]?.tool,
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
-      const errorMessage: Message = {
-        id: messages.length + 2,
-        role: "assistant",
-        content: "Xin lỗi, có lỗi xảy ra khi xử lý yêu cầu của bạn. Vui lòng thử lại.",
-        time: new Date().toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) => {
+        const updated = [...prev];
+        const lastMsg = updated[updated.length - 1];
+        if (lastMsg.role === "assistant") {
+          lastMsg.content = "Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.";
+          lastMsg.isStreaming = false;
+        }
+        return updated;
+      });
     } finally {
       setIsLoading(false);
     }
@@ -254,7 +293,12 @@ export default function ChatPage() {
                       : "bg-white text-[#0a0b0d] rounded-bl-md border border-[#eef0f3]"
                   }`}
                 >
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                  <div className="whitespace-pre-wrap">
+                    {msg.content}
+                    {msg.isStreaming && (
+                      <span className="inline-block w-2 h-4 bg-[#7c828a] ml-1 animate-pulse" />
+                    )}
+                  </div>
                 </div>
 
                 <p
@@ -279,23 +323,7 @@ export default function ChatPage() {
               )}
             </div>
           ))}
-
-          {isLoading && (
-            <div className="flex gap-3">
-              <img
-                src={getDicebearAvatar("crewwise-ai@crewwise.com")}
-                alt="Crewwise AI"
-                className="h-8 w-8 shrink-0 rounded-full bg-[#eef0f3]"
-              />
-              <div className="bg-white rounded-2xl rounded-bl-md border border-[#eef0f3] px-4 py-3">
-                <div className="flex gap-1">
-                  <div className="h-2 w-2 bg-[#7c828a] rounded-full animate-bounce" />
-                  <div className="h-2 w-2 bg-[#7c828a] rounded-full animate-bounce delay-100" />
-                  <div className="h-2 w-2 bg-[#7c828a] rounded-full animate-bounce delay-200" />
-                </div>
-              </div>
-            </div>
-          )}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Quick actions */}
@@ -322,7 +350,7 @@ export default function ChatPage() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="Nhập tin nhắn..."
               className="flex-1 h-11 rounded-xl border-[#dee1e6] bg-white"
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
               disabled={isLoading}
             />
             <Button
