@@ -52,9 +52,10 @@ export function Sidebar({ user, onLogout, collapsed, onToggle }: SidebarProps) {
 
   return (
     <aside
-      className={`fixed left-0 top-0 bottom-0 z-40 flex flex-col bg-[#0a0b0d] text-white transition-all duration-300 ${
+      className={`fixed left-0 top-0 bottom-0 z-40 flex flex-col bg-[#0a0b0d] text-white ${
         collapsed ? "w-[72px]" : "w-[260px]"
       }`}
+      style={{ transition: "width 200ms ease-in-out" }}
     >
       {/* Logo & Toggle */}
       <div className="flex h-16 items-center justify-between px-4 border-b border-[#16181c]">

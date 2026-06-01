@@ -96,9 +96,11 @@ export default function DashboardLayout({
           onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
         <div
-          className={`flex-1 transition-all duration-300 ${
-            sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"
-          }`}
+          className="flex-1"
+          style={{
+            marginLeft: sidebarCollapsed ? "72px" : "260px",
+            transition: "margin-left 200ms ease-in-out",
+          }}
         >
           <Header title={getPageTitle()} user={user} />
           <main className="p-8">{children}</main>

@@ -3,7 +3,7 @@ logs/
 __pycache__/
 *.log
 .DS_Store
-models/
+/models/
 *.pyc
 .venv/
 venv/
