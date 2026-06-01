@@ -48,10 +48,24 @@ class LeaveRequestResponse(BaseModel):
     end_date: str
     reason: str
     status: str
-    created_at: str | None
+    created_at: str | None = None
 
     class Config:
         from_attributes = True
+
+    @classmethod
+    def from_orm(cls, obj):
+        data = {
+            "request_id": obj.request_id,
+            "employee_id": obj.employee_id,
+            "type": obj.type,
+            "start_date": obj.start_date,
+            "end_date": obj.end_date,
+            "reason": obj.reason,
+            "status": obj.status,
+            "created_at": obj.created_at.isoformat() if obj.created_at else None,
+        }
+        return cls(**data)
 
 
 class TaskResponse(BaseModel):
@@ -64,10 +78,26 @@ class TaskResponse(BaseModel):
     creator_id: str
     due_date: str
     tags: str
-    created_at: str | None
+    created_at: str | None = None
 
     class Config:
         from_attributes = True
+
+    @classmethod
+    def from_orm(cls, obj):
+        data = {
+            "task_id": obj.task_id,
+            "title": obj.title,
+            "description": obj.description,
+            "status": obj.status,
+            "priority": obj.priority,
+            "assignee_id": obj.assignee_id,
+            "creator_id": obj.creator_id,
+            "due_date": obj.due_date,
+            "tags": obj.tags,
+            "created_at": obj.created_at.isoformat() if obj.created_at else None,
+        }
+        return cls(**data)
 
 
 class CreateTaskRequest(BaseModel):
@@ -155,7 +185,8 @@ def list_leave_requests(
         query = query.filter(LeaveRequest.employee_id == employee_id)
     if status:
         query = query.filter(LeaveRequest.status == status)
-    return query.all()
+    results = query.all()
+    return [LeaveRequestResponse.from_orm(r) for r in results]
 
 
 @router.post("/leave-requests", response_model=LeaveRequestResponse)
@@ -174,7 +205,7 @@ def create_leave_request(req: CreateLeaveRequest, db: Session = Depends(get_db))
     db.add(leave)
     db.commit()
     db.refresh(leave)
-    return leave
+    return LeaveRequestResponse.from_orm(leave)
 
 
 @router.patch("/leave-requests/{request_id}")
@@ -208,7 +239,8 @@ def list_tasks(
         query = query.filter(Task.assignee_id == assignee_id)
     if status:
         query = query.filter(Task.status == status)
-    return query.all()
+    results = query.all()
+    return [TaskResponse.from_orm(r) for r in results]
 
 
 @router.post("/tasks", response_model=TaskResponse)
@@ -229,7 +261,7 @@ def create_task(creator_id: str, req: CreateTaskRequest, db: Session = Depends(g
     db.add(task)
     db.commit()
     db.refresh(task)
-    return task
+    return TaskResponse.from_orm(task)
 
 
 @router.patch("/tasks/{task_id}", response_model=TaskResponse)
@@ -255,7 +287,7 @@ def update_task(
         task.tags = json.dumps(req.tags, ensure_ascii=False)
     db.commit()
     db.refresh(task)
-    return task
+    return TaskResponse.from_orm(task)
 
 
 @router.delete("/tasks/{task_id}")
