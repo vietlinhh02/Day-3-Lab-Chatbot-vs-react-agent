@@ -41,6 +41,7 @@ export default function DashboardLayout({
     position: string;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
 
   useEffect(() => {
     const stored = localStorage.getItem("crewwise_user");
@@ -88,8 +89,17 @@ export default function DashboardLayout({
   return (
     <UserContext.Provider value={{ user }}>
       <div className="flex min-h-screen bg-[#f7f7f7]">
-        <Sidebar user={user} onLogout={handleLogout} />
-        <div className="flex-1 ml-[260px]">
+        <Sidebar
+          user={user}
+          onLogout={handleLogout}
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
+        <div
+          className={`flex-1 transition-all duration-300 ${
+            sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"
+          }`}
+        >
           <Header title={getPageTitle()} user={user} />
           <main className="p-8">{children}</main>
         </div>
