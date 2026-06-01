@@ -1,4 +1,5 @@
 import uuid
+import json
 from typing import Generator
 
 from fastapi import APIRouter, HTTPException
@@ -9,14 +10,27 @@ from app.config import settings
 from app.core.llm_provider import LLMProvider
 from app.core.openai_provider import OpenAIProvider
 from app.core.ollama_provider import OllamaProvider
+from app.core.deepseek_provider import DeepSeekProvider
 from app.models.schemas import ChatRequest, ChatResponse, SessionInfo
 from app.telemetry.metrics import tracker
-from app.tools import get_hr_tools
+from app.tools import get_leave_request_tools, get_user_management_tools, get_task_tools
+from app.tools.hr_tools import search_hr_policy, _tool
 
 router = APIRouter()
 
 sessions: dict[str, list[dict]] = {}
 session_state: dict[str, dict] = {}
+
+# Cache tools to avoid recreating them every request
+_cached_tools = None
+
+
+def _get_all_tools():
+    global _cached_tools
+    if _cached_tools is None:
+        hr_policy_tool = _tool("Search_HR_Policy", "Tra cứu chính sách nhân sự từ sổ tay công ty.", search_hr_policy)
+        _cached_tools = [hr_policy_tool] + get_leave_request_tools() + get_user_management_tools() + get_task_tools()
+    return _cached_tools
 
 
 def _get_provider(provider_name: str | None = None, model: str | None = None) -> LLMProvider:
@@ -30,6 +44,12 @@ def _get_provider(provider_name: str | None = None, model: str | None = None) ->
         return OllamaProvider(
             model_name=model or settings.OLLAMA_MODEL,
             base_url=settings.OLLAMA_BASE_URL,
+        )
+    elif name == "deepseek":
+        return DeepSeekProvider(
+            model_name=model or settings.DEEPSEEK_MODEL,
+            api_key=settings.DEEPSEEK_API_KEY,
+            base_url=settings.DEEPSEEK_BASE_URL,
         )
     raise HTTPException(status_code=400, detail=f"Unknown provider: {name}")
 
@@ -46,7 +66,7 @@ def chat(request: ChatRequest):
 
     agent = ReActAgent(
         llm=provider,
-        tools=get_hr_tools(),
+        tools=_get_all_tools(),
         max_steps=settings.MAX_AGENT_STEPS,
     )
     result = agent.run(
@@ -88,24 +108,55 @@ def chat_stream(request: ChatRequest):
 
     if session_id not in sessions:
         sessions[session_id] = []
+    if session_id not in session_state:
+        session_state[session_id] = {}
 
-    history_context = "\n".join(
-        [f"User: {m['user']}\nAssistant: {m['assistant']}" for m in sessions[session_id]]
+    agent = ReActAgent(
+        llm=provider,
+        tools=_get_all_tools(),
+        max_steps=settings.MAX_AGENT_STEPS,
     )
-    prompt = request.message
-    if history_context:
-        prompt = f"Previous conversation:\n{history_context}\n\nUser: {request.message}"
 
     def generate() -> Generator[str, None, None]:
-        full_response = ""
-        for chunk in provider.stream(prompt):
-            full_response += chunk
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
+        # Run agent
+        result = agent.run(
+            request.message,
+            session_state=session_state[session_id],
+            employee_id=request.employee_id,
+            role=request.role,
+            history=sessions[session_id],
+        )
 
+        # Send trace events
+        for step in result.get("trace", []):
+            event_data = {
+                "type": "trace",
+                "tool": step.get("tool", ""),
+                "args": step.get("args", {}),
+            }
+            yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+
+        # Send response in chunks for streaming effect
+        response_text = result["content"]
+        chunk_size = 20
+        for i in range(0, len(response_text), chunk_size):
+            chunk = response_text[i:i + chunk_size]
+            event_data = {"type": "chunk", "content": chunk}
+            yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+
+        # Send done event
+        done_data = {
+            "type": "done",
+            "session_id": session_id,
+            "requires_confirmation": result["requires_confirmation"],
+            "latency_ms": result["latency_ms"],
+        }
+        yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
+
+        # Save to session
         sessions[session_id].append({
             "user": request.message,
-            "assistant": full_response,
+            "assistant": response_text,
         })
 
     return StreamingResponse(generate(), media_type="text/event-stream")

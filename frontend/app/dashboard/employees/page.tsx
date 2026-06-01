@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,93 +8,10 @@ import {
   Plus,
   DotsThree,
   Envelope,
-  Phone,
   MapPin,
 } from "phosphor-react";
 import { getDicebearAvatar } from "@/lib/avatar";
-
-const employees = [
-  {
-    id: "E001",
-    name: "Nguyễn Văn An",
-    email: "an@example.com",
-    role: "employee",
-    department: "Engineering",
-    position: "Backend Developer",
-    status: "active",
-    manager: "Trần Minh Quân",
-  },
-  {
-    id: "E002",
-    name: "Trần Thị Bình",
-    email: "binh@example.com",
-    role: "employee",
-    department: "Marketing",
-    position: "Marketing Specialist",
-    status: "active",
-    manager: "Lê Thị Hương",
-  },
-  {
-    id: "E003",
-    name: "Phạm Đức Minh",
-    email: "minh@example.com",
-    role: "employee",
-    department: "Engineering",
-    position: "Frontend Developer",
-    status: "active",
-    manager: "Trần Minh Quân",
-  },
-  {
-    id: "E004",
-    name: "Lê Thị Hương",
-    email: "hr@example.com",
-    role: "hr_admin",
-    department: "Human Resources",
-    position: "HR Manager",
-    status: "active",
-    manager: null,
-  },
-  {
-    id: "E005",
-    name: "Hoàng Văn Dũng",
-    email: "dung@example.com",
-    role: "employee",
-    department: "Sales",
-    position: "Sales Executive",
-    status: "active",
-    manager: "Nguyễn Thị Mai",
-  },
-  {
-    id: "E006",
-    name: "Nguyễn Thị Mai",
-    email: "mai@example.com",
-    role: "manager",
-    department: "Sales",
-    position: "Sales Manager",
-    status: "active",
-    manager: null,
-  },
-  {
-    id: "E007",
-    name: "Trần Minh Quân",
-    email: "manager@example.com",
-    role: "manager",
-    department: "Engineering",
-    position: "Engineering Manager",
-    status: "active",
-    manager: null,
-  },
-  {
-    id: "E008",
-    name: "Vũ Thị Hoa",
-    email: "hoa@example.com",
-    role: "employee",
-    department: "Finance",
-    position: "Accountant",
-    status: "inactive",
-    manager: "Lê Thị Hương",
-  },
-];
+import { getEmployees, Employee } from "@/lib/api";
 
 const statusColors: Record<string, { bg: string; text: string }> = {
   active: { bg: "#edfaf3", text: "#05b169" },
@@ -108,8 +25,25 @@ const roleColors: Record<string, { bg: string; text: string }> = {
 };
 
 export default function EmployeesPage() {
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [search, setSearch] = useState("");
   const [filterDept, setFilterDept] = useState("all");
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadEmployees();
+  }, []);
+
+  async function loadEmployees() {
+    try {
+      const data = await getEmployees();
+      setEmployees(data);
+    } catch (error) {
+      console.error("Failed to load employees:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   const departments = [
     "all",
@@ -118,15 +52,22 @@ export default function EmployeesPage() {
 
   const filtered = employees.filter((e) => {
     const matchSearch =
-      e.name.toLowerCase().includes(search.toLowerCase()) ||
+      e.full_name.toLowerCase().includes(search.toLowerCase()) ||
       e.email.toLowerCase().includes(search.toLowerCase());
     const matchDept = filterDept === "all" || e.department === filterDept;
     return matchSearch && matchDept;
   });
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#0052ff] border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-[#0a0b0d] tracking-tight">
@@ -142,7 +83,6 @@ export default function EmployeesPage() {
         </Button>
       </div>
 
-      {/* Filters */}
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <MagnifyingGlass
@@ -173,17 +113,16 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      {/* Employee grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
         {filtered.map((emp) => (
           <div
-            key={emp.id}
+            key={emp.employee_id}
             className="rounded-2xl bg-white border border-[#eef0f3] p-5 hover:border-[#dee1e6] transition-colors"
           >
             <div className="flex items-start justify-between mb-4">
               <img
                 src={getDicebearAvatar(emp.email)}
-                alt={emp.name}
+                alt={emp.full_name}
                 className="h-12 w-12 rounded-full bg-[#f7f7f7]"
               />
               <button className="flex h-8 w-8 items-center justify-center rounded-lg text-[#7c828a] hover:bg-[#f7f7f7]">
@@ -194,7 +133,7 @@ export default function EmployeesPage() {
             <div className="space-y-3">
               <div>
                 <h3 className="text-sm font-semibold text-[#0a0b0d]">
-                  {emp.name}
+                  {emp.full_name}
                 </h3>
                 <p className="text-xs text-[#7c828a]">{emp.position}</p>
               </div>
@@ -203,8 +142,8 @@ export default function EmployeesPage() {
                 <span
                   className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
                   style={{
-                    backgroundColor: roleColors[emp.role].bg,
-                    color: roleColors[emp.role].text,
+                    backgroundColor: roleColors[emp.role]?.bg || "#f7f7f7",
+                    color: roleColors[emp.role]?.text || "#7c828a",
                   }}
                 >
                   {emp.role}
@@ -212,11 +151,11 @@ export default function EmployeesPage() {
                 <span
                   className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
                   style={{
-                    backgroundColor: statusColors[emp.status].bg,
-                    color: statusColors[emp.status].text,
+                    backgroundColor: statusColors[emp.employment_status]?.bg || "#f7f7f7",
+                    color: statusColors[emp.employment_status]?.text || "#7c828a",
                   }}
                 >
-                  {emp.status}
+                  {emp.employment_status}
                 </span>
               </div>
 

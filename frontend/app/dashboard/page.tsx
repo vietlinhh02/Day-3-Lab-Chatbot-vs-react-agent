@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useUser } from "./layout";
 import {
   Users,
@@ -23,6 +24,12 @@ import {
   Filler,
 } from "chart.js";
 import { Line, Bar, Doughnut } from "react-chartjs-2";
+import {
+  getDashboardStats,
+  getRecentActivities,
+  DashboardStats,
+  Activity,
+} from "@/lib/api";
 
 ChartJS.register(
   CategoryScale,
@@ -37,99 +44,11 @@ ChartJS.register(
   Filler
 );
 
-const stats = [
-  {
-    label: "Tổng nhân viên",
-    value: "128",
-    icon: Users,
-    change: "+12%",
-    changeType: "up" as const,
-    color: "#0052ff",
-    bgColor: "#eef4ff",
-  },
-  {
-    label: "Đơn phép chờ duyệt",
-    value: "8",
-    icon: CalendarBlank,
-    change: "-3%",
-    changeType: "down" as const,
-    color: "#f4b000",
-    bgColor: "#fef9e7",
-  },
-  {
-    label: "Cuộc trò chuyện AI",
-    value: "1,234",
-    icon: ChatCircleText,
-    change: "+28%",
-    changeType: "up" as const,
-    color: "#05b169",
-    bgColor: "#edfaf3",
-  },
-  {
-    label: "Hiệu suất trung bình",
-    value: "92%",
-    icon: TrendUp,
-    change: "+5%",
-    changeType: "up" as const,
-    color: "#8b5cf6",
-    bgColor: "#f3f0ff",
-  },
-];
-
-const lineChartData = {
-  labels: ["T1", "T2", "T3", "T4", "T5", "T6"],
-  datasets: [
-    {
-      label: "Nhân viên mới",
-      data: [12, 19, 15, 25, 22, 30],
-      borderColor: "#0052ff",
-      backgroundColor: "rgba(0, 82, 255, 0.08)",
-      fill: true,
-      tension: 0.4,
-      pointRadius: 4,
-      pointHoverRadius: 6,
-    },
-  ],
-};
-
-const barChartData = {
-  labels: ["T1", "T2", "T3", "T4", "T5", "T6"],
-  datasets: [
-    {
-      label: "Đơn phép",
-      data: [15, 22, 18, 28, 20, 25],
-      backgroundColor: "#0052ff",
-      borderRadius: 8,
-      barThickness: 32,
-    },
-  ],
-};
-
-const doughnutData = {
-  labels: ["Engineering", "Marketing", "Sales", "HR", "Finance"],
-  datasets: [
-    {
-      data: [45, 25, 20, 15, 10],
-      backgroundColor: [
-        "#0052ff",
-        "#05b169",
-        "#f4b000",
-        "#8b5cf6",
-        "#cf202f",
-      ],
-      borderWidth: 0,
-      cutout: "70%",
-    },
-  ],
-};
-
 const chartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: {
-      display: false,
-    },
+    legend: { display: false },
     tooltip: {
       backgroundColor: "#0a0b0d",
       titleColor: "#ffffff",
@@ -141,68 +60,151 @@ const chartOptions = {
   },
   scales: {
     x: {
-      grid: {
-        display: false,
-      },
-      border: {
-        display: false,
-      },
-      ticks: {
-        color: "#7c828a",
-        font: {
-          size: 12,
-        },
-      },
+      grid: { display: false },
+      border: { display: false },
+      ticks: { color: "#7c828a", font: { size: 12 } },
     },
     y: {
-      grid: {
-        color: "#eef0f3",
-      },
-      border: {
-        display: false,
-      },
-      ticks: {
-        color: "#7c828a",
-        font: {
-          size: 12,
-        },
-      },
-    },
-  },
-};
-
-const doughnutOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: "right" as const,
-      labels: {
-        padding: 16,
-        usePointStyle: true,
-        pointStyle: "circle",
-        color: "#0a0b0d",
-        font: {
-          size: 13,
-        },
-      },
-    },
-    tooltip: {
-      backgroundColor: "#0a0b0d",
-      titleColor: "#ffffff",
-      bodyColor: "#ffffff",
-      padding: 12,
-      cornerRadius: 12,
+      grid: { color: "#eef0f3" },
+      border: { display: false },
+      ticks: { color: "#7c828a", font: { size: 12 } },
     },
   },
 };
 
 export default function DashboardPage() {
   const { user } = useUser();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  async function loadData() {
+    try {
+      const [statsData, activitiesData] = await Promise.all([
+        getDashboardStats(),
+        getRecentActivities(),
+      ]);
+      setStats(statsData);
+      setActivities(activitiesData);
+    } catch (error) {
+      console.error("Failed to load dashboard data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  if (isLoading || !stats) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#0052ff] border-t-transparent" />
+      </div>
+    );
+  }
+
+  const statCards = [
+    {
+      label: "Tổng nhân viên",
+      value: stats.total_employees.toString(),
+      icon: Users,
+      change: "+12%",
+      changeType: "up" as const,
+      color: "#0052ff",
+      bgColor: "#eef4ff",
+    },
+    {
+      label: "Đơn phép chờ duyệt",
+      value: stats.pending_leaves.toString(),
+      icon: CalendarBlank,
+      change: "-3%",
+      changeType: "down" as const,
+      color: "#f4b000",
+      bgColor: "#fef9e7",
+    },
+    {
+      label: "Tổng công việc",
+      value: stats.total_tasks.toString(),
+      icon: ChatCircleText,
+      change: "+28%",
+      changeType: "up" as const,
+      color: "#05b169",
+      bgColor: "#edfaf3",
+    },
+    {
+      label: "Hoàn thành",
+      value: stats.done_tasks.toString(),
+      icon: TrendUp,
+      change: "+5%",
+      changeType: "up" as const,
+      color: "#8b5cf6",
+      bgColor: "#f3f0ff",
+    },
+  ];
+
+  const departments = Object.entries(stats.departments);
+  const deptLabels = departments.map(([d]) => d);
+  const deptData = departments.map(([, c]) => c);
+
+  const lineChartData = {
+    labels: ["T1", "T2", "T3", "T4", "T5", "T6"],
+    datasets: [
+      {
+        label: "Nhân viên mới",
+        data: [12, 19, 15, 25, 22, stats.total_employees],
+        borderColor: "#0052ff",
+        backgroundColor: "rgba(0, 82, 255, 0.08)",
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      },
+    ],
+  };
+
+  const leaveByStatus = Object.entries(stats.leave_by_status || {});
+  const barChartData = {
+    labels: leaveByStatus.map(([s]) =>
+      s === "submitted"
+        ? "Chờ duyệt"
+        : s === "approved"
+        ? "Đã duyệt"
+        : s === "rejected"
+        ? "Từ chối"
+        : s
+    ),
+    datasets: [
+      {
+        label: "Đơn phép",
+        data: leaveByStatus.map(([, c]) => c),
+        backgroundColor: "#0052ff",
+        borderRadius: 8,
+        barThickness: 32,
+      },
+    ],
+  };
+
+  const doughnutData = {
+    labels: deptLabels,
+    datasets: [
+      {
+        data: deptData,
+        backgroundColor: [
+          "#0052ff",
+          "#05b169",
+          "#f4b000",
+          "#8b5cf6",
+          "#cf202f",
+        ],
+        borderWidth: 0,
+      },
+    ],
+  };
 
   return (
     <div className="space-y-8">
-      {/* Welcome */}
       <div>
         <h2 className="text-2xl font-semibold text-[#0a0b0d] tracking-tight">
           Xin chào, {user.full_name}!
@@ -212,9 +214,8 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Stats grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {stats.map((stat) => (
+        {statCards.map((stat) => (
           <div
             key={stat.label}
             className="rounded-2xl bg-white border border-[#eef0f3] p-5 flex flex-col gap-4"
@@ -256,9 +257,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Line chart - Employee growth */}
         <div className="rounded-2xl bg-white border border-[#eef0f3] p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -267,28 +266,18 @@ export default function DashboardPage() {
               </h3>
               <p className="text-sm text-[#7c828a] mt-0.5">6 tháng gần nhất</p>
             </div>
-            <div className="flex items-center gap-1 text-sm font-medium text-[#05b169]">
-              <ArrowUpRight size={16} />
-              +45%
-            </div>
           </div>
           <div className="h-[280px]">
             <Line data={lineChartData} options={chartOptions} />
           </div>
         </div>
 
-        {/* Bar chart - Leave requests */}
         <div className="rounded-2xl bg-white border border-[#eef0f3] p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-base font-semibold text-[#0a0b0d]">
-                Đơn phép theo tháng
+                Đơn phép theo trạng thái
               </h3>
-              <p className="text-sm text-[#7c828a] mt-0.5">6 tháng gần nhất</p>
-            </div>
-            <div className="flex items-center gap-1 text-sm font-medium text-[#0052ff]">
-              <ArrowUpRight size={16} />
-              Tổng: 128
             </div>
           </div>
           <div className="h-[280px]">
@@ -297,72 +286,68 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Bottom row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Doughnut chart - Department distribution */}
         <div className="rounded-2xl bg-white border border-[#eef0f3] p-6">
           <h3 className="text-base font-semibold text-[#0a0b0d] mb-6">
             Phân bổ phòng ban
           </h3>
           <div className="h-[260px]">
-            <Doughnut data={doughnutData} options={doughnutOptions} />
+            <Doughnut
+              data={doughnutData}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: "right" as const,
+                    labels: {
+                      padding: 16,
+                      usePointStyle: true,
+                      pointStyle: "circle",
+                      color: "#0a0b0d",
+                      font: { size: 12 },
+                    },
+                  },
+                  tooltip: chartOptions.plugins.tooltip,
+                },
+              }}
+            />
           </div>
         </div>
 
-        {/* Recent activity */}
         <div className="lg:col-span-2 rounded-2xl bg-white border border-[#eef0f3] p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-base font-semibold text-[#0a0b0d]">
               Hoạt động gần đây
             </h3>
-            <button className="text-sm font-medium text-[#0052ff] hover:text-[#003ecc]">
-              Xem tất cả
-            </button>
           </div>
           <div className="space-y-1">
-            {[
-              {
-                action: "Nguyễn Văn An đã gửi đơn xin phép",
-                time: "2 phút trước",
-                color: "#f4b000",
-              },
-              {
-                action: "Trần Minh Quân đã phê duyệt đơn phép",
-                time: "15 phút trước",
-                color: "#05b169",
-              },
-              {
-                action: "Lê Thị Hương đã cập nhật hồ sơ nhân viên",
-                time: "1 giờ trước",
-                color: "#0052ff",
-              },
-              {
-                action: "Phạm Đức Minh đã đăng ký nghỉ ốm",
-                time: "2 giờ trước",
-                color: "#8b5cf6",
-              },
-              {
-                action: "Hệ thống đã gửi thông báo nhắc nhở",
-                time: "3 giờ trước",
-                color: "#7c828a",
-              },
-            ].map((activity, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-4 py-3 border-b border-[#eef0f3] last:border-0"
-              >
+            {activities.length > 0 ? (
+              activities.map((activity, i) => (
                 <div
-                  className="h-2 w-2 rounded-full shrink-0"
-                  style={{ backgroundColor: activity.color }}
-                />
-                <span className="flex-1 text-sm text-[#0a0b0d]">
-                  {activity.action}
-                </span>
-                <span className="text-xs text-[#7c828a] shrink-0">
-                  {activity.time}
-                </span>
-              </div>
-            ))}
+                  key={i}
+                  className="flex items-center gap-4 py-3 border-b border-[#eef0f3] last:border-0"
+                >
+                  <div
+                    className="h-2 w-2 rounded-full shrink-0"
+                    style={{
+                      backgroundColor:
+                        activity.type === "leave" ? "#f4b000" : "#0052ff",
+                    }}
+                  />
+                  <span className="flex-1 text-sm text-[#0a0b0d]">
+                    {activity.action}
+                  </span>
+                  <span className="text-xs text-[#7c828a] shrink-0">
+                    {activity.employee_id}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-[#7c828a] text-center py-4">
+                Chưa có hoạt động nào
+              </p>
+            )}
           </div>
         </div>
       </div>
