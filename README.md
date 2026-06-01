@@ -1,56 +1,79 @@
-# Lab 3: Chatbot vs ReAct Agent (Industry Edition)
+# Lab 3: Chatbot vs ReAct Agent
 
-Welcome to Phase 3 of the Agentic AI course! This lab focuses on moving from a simple LLM Chatbot to a sophisticated **ReAct Agent** with industry-standard monitoring.
+Đây là lab về quá trình chuyển từ chatbot LLM đơn giản sang **ReAct Agent** có
+khả năng suy luận nhiều bước, gọi công cụ và ghi log để phân tích lỗi.
 
-## 🚀 Getting Started
+## Tài liệu đề tài HR Agent
 
-### 1. Setup Environment
-Copy the `.env.example` to `.env` and fill in your API keys:
+Repo đã có bộ tài liệu cho đề tài **Proactive HR & Workflow Agent** trong
+[`docs/`](docs/).
+
+Hướng triển khai đề xuất:
+
+- **FastAPI** cho backend API.
+- **Ollama** để chạy LLM local.
+- **RAG** trên PDF sổ tay nhân sự.
+- **Tool calling** cho tra cứu chính sách, kiểm tra ngày phép và workflow xin nghỉ.
+- **User management** để HR tạo, tìm kiếm, cập nhật và khóa/mở khóa nhân viên.
+- **CRUD tool calling** để agent tạo, đọc, cập nhật và hủy yêu cầu xin nghỉ.
+
+Bắt đầu từ: [`docs/README.md`](docs/README.md).
+
+## Cài đặt môi trường
+
+Copy `.env.example` sang `.env` và điền API keys nếu dùng provider cloud:
+
 ```bash
 cp .env.example .env
 ```
 
-### 2. Install Dependencies
+Cài dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Directory Structure
-- `src/tools/`: Extension point for your custom tools.
+Extension point cho tool nằm tại:
 
-## 🏠 Running with Local Models (CPU)
+```text
+src/tools/
+```
 
-If you don't want to use OpenAI or Gemini, you can run open-source models (like Phi-3) directly on your CPU using `llama-cpp-python`.
+## Chạy model local bằng CPU
 
-### 1. Download the Model
-Download the **Phi-3-mini-4k-instruct-q4.gguf** (approx 2.2GB) from Hugging Face:
+Nếu không muốn dùng OpenAI hoặc Gemini, bạn có thể chạy model local bằng
+`llama-cpp-python`.
+
+### 1. Tải model
+
+Tải **Phi-3-mini-4k-instruct-q4.gguf** từ Hugging Face:
+
 - [Phi-3-mini-4k-instruct-GGUF](https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf)
-- Direct Download: [phi-3-mini-4k-instruct-q4.gguf](https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf)
+- Tải file `phi-3-mini-4k-instruct-q4.gguf` từ trang model.
 
-### 2. Place Model in Project
-Create a `models/` folder in the root and move the downloaded `.gguf` file there.
+### 2. Đặt model vào project
 
-### 3. Update `.env`
-Change your `DEFAULT_PROVIDER` and set the path:
+Tạo thư mục `models/` ở root và đặt file `.gguf` vào đó.
+
+### 3. Cập nhật `.env`
+
 ```env
 DEFAULT_PROVIDER=local
 LOCAL_MODEL_PATH=./models/Phi-3-mini-4k-instruct-q4.gguf
 ```
 
-## 🎯 Lab Objectives
+## Mục tiêu lab
 
-1.  **Baseline Chatbot**: Observe the limitations of a standard LLM when faced with multi-step reasoning.
-2.  **ReAct Loop**: Implement the `Thought-Action-Observation` cycle in `src/agent/agent.py`.
-3.  **Provider Switching**: Swap between OpenAI and Gemini seamlessly using the `LLMProvider` interface.
-4.  **Failure Analysis**: Use the structured logs in `logs/` to identify why the agent fails (hallucinations, parsing errors).
-5.  **Grading & Bonus**: Follow the [SCORING.md](file:///Users/tindt/personal/ai-thuc-chien/day03-lab-agent/SCORING.md) to maximize your points and explore bonus metrics.
+1. **Baseline Chatbot**: quan sát giới hạn của chatbot khi gặp tác vụ nhiều bước.
+2. **ReAct Loop**: implement chu trình `Thought -> Action -> Observation`.
+3. **Provider Switching**: chuyển giữa OpenAI, Gemini và local provider.
+4. **Failure Analysis**: dùng structured logs trong `logs/` để tìm lỗi.
+5. **Grading & Bonus**: xem [SCORING.md](SCORING.md) để tối đa điểm.
 
-## 🛠️ How to Use This Baseline
-The code is designed as a **Production Prototype**. It includes:
-- **Telemetry**: Every action is logged in JSON format for later analysis.
-- **Robust Provider Pattern**: Easily extendable to any LLM API.
-- **Clean Skeletons**: Focus on the logic that matters—the agent's reasoning process.
+## Cách dùng skeleton này
 
----
+Code hiện tại là production prototype ở mức skeleton:
 
-*Happy Coding! Let's build agents that actually work.*
+- **Telemetry**: mỗi action được log dạng JSON để phân tích.
+- **Provider Pattern**: dễ mở rộng sang LLM API khác.
+- **Clean Skeletons**: tập trung vào logic ReAct và tool calling.
