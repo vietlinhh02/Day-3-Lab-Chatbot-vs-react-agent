@@ -1,4 +1,5 @@
 import json
+import ast
 import time
 from typing import Any
 
@@ -299,7 +300,11 @@ Rules:
         try:
             return json.loads(tool_input)
         except json.JSONDecodeError:
-            return {}
+            try:
+                parsed = ast.literal_eval(tool_input)
+            except (ValueError, SyntaxError):
+                return {}
+            return parsed if isinstance(parsed, dict) else {}
 
     def _confirmation_message(self, tool_name: str, args: dict[str, Any]) -> str:
         payload = json.dumps(args, ensure_ascii=False)
