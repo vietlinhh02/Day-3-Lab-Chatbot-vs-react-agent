@@ -11,8 +11,13 @@ class Settings(BaseSettings):
 
     DEFAULT_PROVIDER: str = "openai"
     LOG_LEVEL: str = "INFO"
+    MAX_AGENT_STEPS: int = 6
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
 
 settings = Settings()
