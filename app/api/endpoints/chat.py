@@ -11,7 +11,7 @@ from app.core.openai_provider import OpenAIProvider
 from app.core.ollama_provider import OllamaProvider
 from app.models.schemas import ChatRequest, ChatResponse, SessionInfo
 from app.telemetry.metrics import tracker
-from app.tools import get_hr_tools
+from app.tools import get_leave_request_tools, get_user_management_tools
 
 router = APIRouter()
 
@@ -46,7 +46,7 @@ def chat(request: ChatRequest):
 
     agent = ReActAgent(
         llm=provider,
-        tools=get_hr_tools(),
+        tools=[*get_leave_request_tools(), *get_user_management_tools()],
         max_steps=settings.MAX_AGENT_STEPS,
     )
     result = agent.run(
