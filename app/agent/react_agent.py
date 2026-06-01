@@ -236,6 +236,11 @@ class ReActAgent:
             answer = self._execute_pending_action(session_state, trace)
             return self._build_result(answer, trace, start)
 
+        # Handle simple greetings directly without agent loop
+        if self._is_simple_greeting(user_input):
+            answer = self._generate_simple_response(user_input, employee_id)
+            return self._build_result(answer, trace, start)
+
         system_prompt = self._system_prompt(employee_id=employee_id, role=role)
         lc_llm = ProviderLangChainLLM(self.llm, system_prompt)
         lc_tools = self._build_langchain_tools(session_state, role, trace)
@@ -573,6 +578,17 @@ Các từ xác nhận: có, đồng ý, đúng rồi, tạo đi, hủy đi, sử
             )
         payload = json.dumps(args, ensure_ascii=False)
         return f"Mình sẽ thực hiện thao tác {tool_name} với thông tin {payload}. Bạn xác nhận không?"
+
+    def _is_simple_greeting(self, user_input: str) -> bool:
+        greetings = {"hi", "hello", "hey", "xin chào", "chào", "chào bạn", "alo", "yo", "hế lô"}
+        normalized = user_input.strip().lower()
+        return normalized in greetings
+
+    def _generate_simple_response(self, user_input: str, employee_id: str) -> str:
+        system = "Bạn là trợ lý HR AI. Trả lời ngắn gọn bằng tiếng Việt có dấu."
+        prompt = f"Người dùng (mã NV: {employee_id}) nói: {user_input}\n\nHãy chào lại và hỏi bạn có thể giúp gì."
+        result = self.llm.generate(prompt, system_prompt=system)
+        return result["content"]
 
     def _is_confirmation(self, user_input: str) -> bool:
         normalized = user_input.strip().lower()
