@@ -62,7 +62,16 @@ class OllamaProvider(LLMProvider):
     def _build_payload(
         self, prompt: str, system_prompt: Optional[str] = None, stream: bool = False
     ) -> dict:
-        payload = {"model": self.model_name, "prompt": prompt, "stream": stream}
+        payload = {
+            "model": self.model_name,
+            "prompt": prompt,
+            "stream": stream,
+            "think": False,  # Disable thinking mode for faster responses
+            "options": {
+                "num_predict": 512,  # Limit response length
+                "temperature": 0.7,
+            },
+        }
         if system_prompt:
             payload["system"] = system_prompt
         return payload
