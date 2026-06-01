@@ -1,4 +1,3 @@
-import time
 import uuid
 from typing import Generator
 
@@ -9,7 +8,7 @@ from app.config import settings
 from app.core.llm_provider import LLMProvider
 from app.core.openai_provider import OpenAIProvider
 from app.core.ollama_provider import OllamaProvider
-from app.models.schemas import ChatRequest, ChatResponse, StreamChunk, SessionInfo
+from app.models.schemas import ChatRequest, ChatResponse, SessionInfo
 from app.telemetry.metrics import tracker
 
 router = APIRouter()
