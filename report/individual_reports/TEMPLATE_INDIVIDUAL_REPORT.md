@@ -1,8 +1,8 @@
 # Individual Report: Lab 3 - Chatbot vs ReAct Agent
 
-- **Student Name**: [Your Name Here]
-- **Student ID**: [Your ID Here]
-- **Date**: [Date Here]
+- **Student Name**: Mai Ngọc Duy
+- **Student ID**: 2A202600736
+- **Date**: 1/6/2026
 
 ---
 
@@ -46,6 +46,3 @@
 - **Performance**: [e.g., Vector DB for tool retrieval in a many-tool system]
 
 ---
-
-> [!NOTE]
-> Submit this report by renaming it to `REPORT_[YOUR_NAME].md` and placing it in this folder.
