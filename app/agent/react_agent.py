@@ -23,6 +23,9 @@ WRITE_TOOLS = {
     "Deactivate_Employee",
     "Activate_Employee",
     "Update_Leave_Balance",
+    "Create_Task",
+    "Update_Task",
+    "Delete_Task",
 }
 
 HR_ADMIN_TOOLS = {
@@ -140,6 +143,38 @@ TOOL_DESCRIPTIONS = {
         "Input: {\"actor_employee_id\": \"HR001\", \"employee_id\": \"E001\", "
         "\"annual_leave_remaining\": 10, \"sick_leave_remaining\": 5, "
         "\"reason\": \"Điều chỉnh theo hợp đồng mới\", \"confirmed\": true}"
+    ),
+    "Create_Task": (
+        "Tạo công việc mới. PHẢI hỏi xác nhận. "
+        "Input: {\"actor_employee_id\": \"E001\", \"title\": \"Cập nhật chính sách\", "
+        "\"description\": \"Mô tả chi tiết\", \"priority\": \"high\", "
+        "\"assignee_id\": \"E002\", \"due_date\": \"2026-06-15\", "
+        "\"tags\": [\"HR\", \"Chính sách\"], \"confirmed\": true}"
+    ),
+    "Get_Task": (
+        "Xem chi tiết công việc theo mã. "
+        "Input: {\"task_id\": \"T-001\"}"
+    ),
+    "List_Tasks": (
+        "Liệt kê công việc, lọc theo người phụ trách hoặc trạng thái. "
+        "Trạng thái: todo, in_progress, review, done, all. "
+        "Input: {\"assignee_id\": \"E001\", \"status\": \"all\", \"limit\": 50}"
+    ),
+    "Update_Task": (
+        "Cập nhật công việc (tiêu đề, trạng thái, ưu tiên, người phụ trách, hạn). "
+        "Chỉ sửa được công việc chưa hoàn thành. PHẢI hỏi xác nhận. "
+        "Input: {\"task_id\": \"T-001\", \"patch\": {\"status\": \"in_progress\", \"priority\": \"high\"}, "
+        "\"actor_employee_id\": \"E001\", \"confirmed\": true}"
+    ),
+    "Delete_Task": (
+        "Xóa công việc. PHẢI hỏi xác nhận. "
+        "Input: {\"task_id\": \"T-001\", \"reason\": \"Không cần thiết nữa\", "
+        "\"actor_employee_id\": \"E001\", \"confirmed\": true}"
+    ),
+    "Search_Tasks": (
+        "Tìm kiếm công việc theo từ khóa, trạng thái, ưu tiên, người phụ trách. "
+        "Input: {\"query\": \"chính sách\", \"status\": \"all\", \"priority\": \"high\", "
+        "\"assignee_id\": \"\", \"limit\": 50}"
     ),
 }
 
@@ -356,6 +391,24 @@ class ReActAgent:
                 f"**Phép năm:** {observation.get('annual_leave_remaining')}\n"
                 f"**Phép ốm:** {observation.get('sick_leave_remaining')}"
             )
+        if pending["tool"] == "Create_Task":
+            item = observation.get("item", {})
+            return (
+                f"Mình đã tạo công việc mới.\n\n"
+                f"**Mã công việc:** {item.get('task_id')}\n"
+                f"**Tiêu đề:** {item.get('title')}\n"
+                f"**Người phụ trách:** {item.get('assignee_id')}\n"
+                f"**Hạn:** {item.get('due_date')}\n"
+                f"**Trạng thái:** {item.get('status')}"
+            )
+        if pending["tool"] == "Update_Task":
+            fields = observation.get("updated_fields", [])
+            return (
+                f"Mình đã cập nhật công việc {observation.get('task_id')}.\n"
+                f"**Các trường đã sửa:** {', '.join(fields)}"
+            )
+        if pending["tool"] == "Delete_Task":
+            return f"Mình đã xóa công việc {observation.get('task_id')} thành công."
         return "Mình đã thực hiện xong thay đổi theo xác nhận của bạn."
 
     def _prompt_template(self) -> PromptTemplate:
@@ -496,6 +549,27 @@ Các từ xác nhận: có, đồng ý, đúng rồi, tạo đi, hủy đi, sử
                 f"- Phép ốm: {args.get('sick_leave_remaining', '')}\n"
                 f"- Lý do: {args.get('reason', '')}\n\n"
                 f"Bạn xác nhận cập nhật không?"
+            )
+        if tool_name == "Create_Task":
+            return (
+                f"Mình sẽ tạo công việc mới:\n"
+                f"- Tiêu đề: {args.get('title', '')}\n"
+                f"- Mô tả: {args.get('description', 'Không có')}\n"
+                f"- Ưu tiên: {args.get('priority', '')}\n"
+                f"- Người phụ trách: {args.get('assignee_id', '')}\n"
+                f"- Hạn: {args.get('due_date', '')}\n"
+                f"- Nhãn: {', '.join(args.get('tags', []))}\n\n"
+                f"Bạn xác nhận tạo công việc này không?"
+            )
+        if tool_name == "Update_Task":
+            patch = args.get("patch", {})
+            changes = "\n".join(f"- {k}: {v}" for k, v in patch.items())
+            return f"Mình sẽ cập nhật công việc {args.get('task_id', '')}:\n{changes}\n\nBạn xác nhận không?"
+        if tool_name == "Delete_Task":
+            return (
+                f"Mình sẽ xóa công việc {args.get('task_id', '')}.\n"
+                f"Lý do: {args.get('reason', '')}\n\n"
+                f"Bạn xác nhận xóa công việc này không?"
             )
         payload = json.dumps(args, ensure_ascii=False)
         return f"Mình sẽ thực hiện thao tác {tool_name} với thông tin {payload}. Bạn xác nhận không?"
