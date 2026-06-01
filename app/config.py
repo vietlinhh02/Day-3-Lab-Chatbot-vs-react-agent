@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     DEFAULT_PROVIDER: str = "ollama"
     LOG_LEVEL: str = "INFO"
-    MAX_AGENT_STEPS: int = 4
+    MAX_AGENT_STEPS: int = 8
 
     model_config = {
         "env_file": ".env",
