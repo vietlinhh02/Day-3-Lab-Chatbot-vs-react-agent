@@ -247,7 +247,11 @@ export async function sendChatMessage(
 export interface StreamEvent {
   type: "trace" | "chunk" | "done";
   tool?: string;
-  args?: any;
+  args?: unknown;
+  observation?: unknown;
+  blocked?: string;
+  pending_confirmation?: boolean;
+  confirmed?: boolean;
   content?: string;
   session_id?: string;
   requires_confirmation?: boolean;

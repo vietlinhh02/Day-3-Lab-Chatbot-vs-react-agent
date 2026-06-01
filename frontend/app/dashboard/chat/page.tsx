@@ -21,12 +21,21 @@ import {
 import { getDicebearAvatar } from "@/lib/avatar";
 import { sendChatMessageStream, StreamEvent } from "@/lib/api";
 
+interface ToolCall {
+  tool: string;
+  args?: unknown;
+  observation?: unknown;
+  blocked?: string;
+  pendingConfirmation?: boolean;
+  confirmed?: boolean;
+}
+
 interface Message {
   id: number;
   role: "user" | "assistant";
   content: string;
   time: string;
-  tool?: string;
+  toolCalls?: ToolCall[];
   isStreaming?: boolean;
 }
 
@@ -72,6 +81,18 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function formatToolValue(value: unknown): string {
+  if (value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return JSON.stringify(value, null, 2);
+}
+
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -82,6 +103,12 @@ export default function ChatPage() {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const updateMessage = (messageId: number, updater: (message: Message) => Message) => {
+    setMessages((prev) =>
+      prev.map((message) => (message.id === messageId ? updater(message) : message))
+    );
   };
 
   const handleSend = async () => {
@@ -122,38 +149,34 @@ export default function ChatPage() {
         currentInput,
         (event: StreamEvent) => {
           if (event.type === "trace" && event.tool) {
-            setMessages((prev) => {
-              const updated = [...prev];
-              const lastMsg = updated[updated.length - 1];
-              if (lastMsg.role === "assistant") {
-                lastMsg.tool = event.tool;
-              }
-              return updated;
-            });
+            const toolName = event.tool;
+            updateMessage(assistantMessage.id, (message) => ({
+              ...message,
+              toolCalls: [
+                ...(message.toolCalls ?? []),
+                {
+                  tool: toolName,
+                  args: event.args,
+                  observation: event.observation,
+                  blocked: event.blocked,
+                  pendingConfirmation: event.pending_confirmation,
+                  confirmed: event.confirmed,
+                },
+              ],
+            }));
           }
 
           if (event.type === "chunk" && event.content) {
-            setMessages((prev) => {
-              const updated = [...prev];
-              const lastMsg = updated[updated.length - 1];
-              if (lastMsg.role === "assistant") {
-                lastMsg.content += event.content;
-              }
-              return updated;
-            });
+            updateMessage(assistantMessage.id, (message) => ({
+              ...message,
+              content: message.content + event.content,
+            }));
             setTimeout(scrollToBottom, 50);
           }
 
           if (event.type === "done") {
             setSessionId(event.session_id);
-            setMessages((prev) => {
-              const updated = [...prev];
-              const lastMsg = updated[updated.length - 1];
-              if (lastMsg.role === "assistant") {
-                lastMsg.isStreaming = false;
-              }
-              return updated;
-            });
+            updateMessage(assistantMessage.id, (message) => ({ ...message, isStreaming: false }));
           }
         },
         sessionId,
@@ -161,15 +184,11 @@ export default function ChatPage() {
         user.role || "employee"
       );
     } catch (error) {
-      setMessages((prev) => {
-        const updated = [...prev];
-        const lastMsg = updated[updated.length - 1];
-        if (lastMsg.role === "assistant") {
-          lastMsg.content = "Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.";
-          lastMsg.isStreaming = false;
-        }
-        return updated;
-      });
+      updateMessage(assistantMessage.id, (message) => ({
+        ...message,
+        content: "Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.",
+        isStreaming: false,
+      }));
     } finally {
       setIsLoading(false);
     }
@@ -301,11 +320,55 @@ export default function ChatPage() {
                   msg.role === "user" ? "order-first" : ""
                 }`}
               >
-                {msg.tool && (
-                  <div className="flex items-center gap-2 text-xs text-[#7c828a]">
-                    <span className="font-mono bg-white px-2 py-1 rounded-md border border-[#eef0f3]">
-                      {msg.tool}
-                    </span>
+                {msg.toolCalls && msg.toolCalls.length > 0 && (
+                  <div className="space-y-2">
+                    {msg.toolCalls.map((toolCall, index) => (
+                      <div
+                        key={`${msg.id}-tool-${index}`}
+                        className="rounded-xl border border-[#d9e6ff] bg-[#eef4ff] px-3 py-2"
+                      >
+                        <div className="flex items-center gap-2 text-xs text-[#4a5a75]">
+                          <span className="font-mono rounded-md bg-white px-2 py-1 border border-[#d9e6ff]">
+                            {toolCall.tool}
+                          </span>
+                          {toolCall.pendingConfirmation && (
+                            <span className="rounded-md bg-[#fff7e6] px-2 py-1 text-[#9a6700]">
+                              Chờ xác nhận
+                            </span>
+                          )}
+                          {toolCall.blocked && (
+                            <span className="rounded-md bg-[#ffe9e9] px-2 py-1 text-[#b42318]">
+                              {toolCall.blocked}
+                            </span>
+                          )}
+                          {toolCall.confirmed && (
+                            <span className="rounded-md bg-[#e8fff3] px-2 py-1 text-[#027a48]">
+                              Đã xác nhận
+                            </span>
+                          )}
+                        </div>
+                        {toolCall.args !== undefined && (
+                          <div className="mt-2">
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-[#667085]">
+                              Args
+                            </p>
+                            <pre className="mt-1 overflow-x-auto rounded-lg bg-white p-2 text-xs text-[#0a0b0d] border border-[#d9e6ff]">
+                              {formatToolValue(toolCall.args)}
+                            </pre>
+                          </div>
+                        )}
+                        {toolCall.observation !== undefined && toolCall.observation !== null && (
+                          <div className="mt-2">
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-[#667085]">
+                              Observation
+                            </p>
+                            <pre className="mt-1 overflow-x-auto rounded-lg bg-white p-2 text-xs text-[#0a0b0d] border border-[#d9e6ff]">
+                              {formatToolValue(toolCall.observation)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
 
@@ -460,7 +523,12 @@ export default function ChatPage() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="Nhập tin nhắn..."
               className="flex-1 h-11 rounded-xl border-[#dee1e6] bg-white"
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void handleSend();
+                }
+              }}
               disabled={isLoading}
             />
             <Button

@@ -49,6 +49,20 @@ def test_create_task():
     assert result["item"]["title"] == "Cập nhật chính sách nghỉ phép"
 
 
+def test_create_task_with_minimal_fields():
+    result = create_task(
+        actor_employee_id="E001",
+        title="Task soạn báo cáo",
+        assignee_id="HR001",
+        due_date="2026-02-28",
+        confirmed=True,
+    )
+    assert result["ok"] is True
+    assert result["item"]["description"] == ""
+    assert result["item"]["priority"] == "medium"
+    assert result["item"]["tags"] == []
+
+
 def test_get_task():
     create_task(
         actor_employee_id="E001",

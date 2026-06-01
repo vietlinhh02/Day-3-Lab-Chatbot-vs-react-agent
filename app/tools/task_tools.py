@@ -118,17 +118,18 @@ def _ensure_confirmed(confirmed: bool) -> None:
 def create_task(
     actor_employee_id: str,
     title: str,
-    description: str,
-    priority: str,
     assignee_id: str,
     due_date: str,
-    tags: list[str],
+    description: str = "",
+    priority: str = "medium",
+    tags: list[str] | None = None,
     confirmed: bool = False,
 ) -> dict[str, Any]:
     def run() -> dict[str, Any]:
         _ensure_confirmed(confirmed)
         tasks = _load_tasks()
         timestamp = _now()
+        normalized_tags = tags or []
 
         task = {
             "task_id": _next_task_id(tasks),
@@ -139,7 +140,7 @@ def create_task(
             "assignee_id": assignee_id,
             "creator_id": actor_employee_id,
             "due_date": due_date,
-            "tags": tags,
+            "tags": normalized_tags,
             "created_at": timestamp,
             "updated_at": timestamp,
         }
@@ -156,7 +157,7 @@ def create_task(
             "priority": priority,
             "assignee_id": assignee_id,
             "due_date": due_date,
-            "tags": tags,
+            "tags": tags or [],
             "confirmed": confirmed,
         },
         run,
@@ -317,7 +318,7 @@ def get_task_tools() -> list[StructuredTool]:
     return [
         StructuredTool.from_function(
             name="Create_Task",
-            description="Tạo công việc mới. Cần xác nhận. Input: actor_employee_id, title, description, priority, assignee_id, due_date, tags, confirmed",
+            description="Tạo công việc mới. Cần xác nhận. Input tối thiểu: actor_employee_id, title, assignee_id, due_date, confirmed. description/priority/tags là optional.",
             func=create_task,
             args_schema=CreateTaskInput,
         ),

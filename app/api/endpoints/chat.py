@@ -133,6 +133,10 @@ def chat_stream(request: ChatRequest):
                 "type": "trace",
                 "tool": step.get("tool", ""),
                 "args": step.get("args", {}),
+                "observation": step.get("observation"),
+                "blocked": step.get("blocked"),
+                "pending_confirmation": step.get("pending_confirmation"),
+                "confirmed": step.get("confirmed"),
             }
             yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
 

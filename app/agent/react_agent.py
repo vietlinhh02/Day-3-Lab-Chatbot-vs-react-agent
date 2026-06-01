@@ -1,14 +1,8 @@
-import json
 import ast
+import json
+import re
 import time
 from typing import Any
-
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.prompts import PromptTemplate
-from langchain.tools import Tool
-from langchain_core.callbacks.manager import CallbackManagerForLLMRun
-from langchain_core.language_models.llms import LLM
-from pydantic import PrivateAttr
 
 from app.core.llm_provider import LLMProvider
 from app.telemetry.logger import logger
@@ -56,31 +50,6 @@ TOOL_DESCRIPTIONS = {
 }
 
 
-class ProviderLangChainLLM(LLM):
-    _provider: LLMProvider = PrivateAttr()
-    _system_prompt: str = PrivateAttr(default="")
-
-    def __init__(self, provider: LLMProvider, system_prompt: str):
-        super().__init__()
-        self._provider = provider
-        self._system_prompt = system_prompt
-
-    @property
-    def _llm_type(self) -> str:
-        return f"provider_{self._provider.__class__.__name__.lower()}"
-
-    @property
-    def model_name(self) -> str:
-        return self._provider.model_name
-
-    def _call(self, prompt: str, stop: list[str] | None = None,
-              run_manager: CallbackManagerForLLMRun | None = None, **kwargs: Any) -> str:
-        if stop:
-            prompt = f"{prompt}\nStop tokens: {', '.join(stop)}"
-        result = self._provider.generate(prompt, system_prompt=self._system_prompt)
-        return result["content"]
-
-
 class ReActAgent:
     def __init__(self, llm: LLMProvider, tools: list[Any], max_steps: int = 6):
         self.llm = llm
@@ -102,37 +71,73 @@ class ReActAgent:
             answer = self._generate_simple_response(user_input, employee_id)
             return self._build_result(answer, trace, start)
 
-        system_prompt = self._system_prompt(employee_id=employee_id, role=role)
-        lc_llm = ProviderLangChainLLM(self.llm, system_prompt)
-        lc_tools = self._build_langchain_tools(session_state, role, trace)
-        agent = create_react_agent(lc_llm, lc_tools, self._prompt_template())
-        executor = AgentExecutor(
-            agent=agent, tools=lc_tools, max_iterations=self.max_steps,
-            handle_parsing_errors=True, return_intermediate_steps=True, verbose=False,
+        answer = self._run_react_loop(
+            user_input=user_input,
+            session_state=session_state,
+            employee_id=employee_id,
+            role=role,
+            history=history,
+            trace=trace,
         )
-
-        result = executor.invoke({
-            "input": self._build_user_prompt(user_input, employee_id, history),
-            "chat_history": self._format_history(history),
-        })
-        for action, observation in result.get("intermediate_steps", []):
-            trace.append({"tool": action.tool, "args": action.tool_input, "observation": observation})
-        answer = result.get("output", "")
         requires_confirmation = bool(session_state.get("pending_action"))
 
         logger.log_event("AGENT_END", {"answer": answer, "requires_confirmation": requires_confirmation})
         return self._build_result(answer, trace, start, requires_confirmation)
 
-    def _build_langchain_tools(self, session_state: dict[str, Any], role: str,
-                               trace: list[dict[str, Any]]) -> list[Tool]:
-        tools = []
-        for tool_name, raw_tool in self.raw_tools.items():
-            description = TOOL_DESCRIPTIONS.get(tool_name, raw_tool.description)
-            tools.append(Tool.from_function(
-                name=tool_name, description=description,
-                func=self._tool_runner(tool_name, session_state, role, trace),
-            ))
-        return tools
+    def _run_react_loop(
+        self,
+        user_input: str,
+        session_state: dict[str, Any],
+        employee_id: str,
+        role: str,
+        history: list[dict[str, str]] | None,
+        trace: list[dict[str, Any]],
+    ) -> str:
+        scratchpad = ""
+        for step in range(1, self.max_steps + 1):
+            prompt = self._build_react_prompt(
+                user_input=user_input,
+                employee_id=employee_id,
+                history=history,
+                scratchpad=scratchpad,
+            )
+            result = self.llm.generate(
+                prompt,
+                system_prompt=self._system_prompt(employee_id=employee_id, role=role),
+            )
+            content = (result.get("content") or "").strip()
+            logger.log_event("AGENT_LLM", {"step": step, "content": content})
+
+            parsed = self._parse_react_output(content)
+            if parsed["final_answer"]:
+                return parsed["final_answer"]
+
+            if not parsed["action"]:
+                scratchpad += (
+                    "Thought: Tôi cần trả lời đúng format.\n"
+                    "Observation: Sai format. Hãy trả lời bằng 'Action' hoặc 'Final Answer'.\n"
+                )
+                continue
+
+            tool_name = parsed["action"]
+            if tool_name not in self.raw_tools:
+                scratchpad += (
+                    f"Thought: Tool {tool_name} không hợp lệ.\n"
+                    "Observation: Tool không tồn tại. Chọn tool trong danh sách.\n"
+                )
+                continue
+
+            observation = self._tool_runner(tool_name, session_state, role, trace)(parsed["action_input"])
+            scratchpad += self._format_scratchpad_step(parsed["thought"], tool_name, parsed["action_input"], observation)
+
+            if session_state.get("pending_action"):
+                payload = json.loads(observation)
+                return payload.get("message", "Vui lòng xác nhận trước khi thực hiện.")
+
+        return (
+            "Tôi chưa thể hoàn tất yêu cầu vì model không kết thúc đúng vòng ReAct. "
+            "Vui lòng thử lại."
+        )
 
     def _tool_runner(self, tool_name: str, session_state: dict[str, Any],
                      role: str, trace: list[dict[str, Any]]):
@@ -154,6 +159,7 @@ class ReActAgent:
                 observation = self.raw_tools[tool_name].invoke(args)
             except Exception as e:
                 observation = {"error": "TOOL_ERROR", "message": str(e)}
+            trace.append({"tool": tool_name, "args": args, "observation": observation})
             logger.log_event("AGENT_TOOL", {"tool": tool_name, "args": args, "observation": observation})
             return json.dumps(observation, ensure_ascii=False)
         return run
@@ -167,7 +173,7 @@ class ReActAgent:
         trace.append({"tool": pending["tool"], "args": pending["args"], "observation": observation, "confirmed": True})
         logger.log_event("AGENT_TOOL", trace[-1])
 
-        if isinstance(observation, dict) and observation.get("error"):
+        if self._is_failed_observation(observation):
             return observation.get("message", "Thao tác không thành công.")
 
         tool = pending["tool"]
@@ -196,33 +202,36 @@ class ReActAgent:
             return f"Đã xóa task {observation.get('task_id')}."
         return "Đã thực hiện xong."
 
-    def _prompt_template(self) -> PromptTemplate:
-        return PromptTemplate.from_template(
-            """Bạn là trợ lý HR AI. Trả lời bằng tiếng Việt có dấu.
-
-Tools:
-{tools}
-
-Format:
-Question: câu hỏi
-Thought: suy nghĩ
-Action: [{tool_names}]
-Action Input: JSON
-Observation: kết quả
-... lặp lại nếu cần
-Thought: Tôi đã có đủ thông tin
-Final Answer: câu trả lời
-
-Rules:
-- Nếu requires_confirmation=true, trả về message đó.
-- Không gọi tool ghi sau khi nhận yêu cầu xác nhận.
-- Luôn dùng tools khi cần dữ liệu nhân sự.
-
-Chat history:
-{chat_history}
-
-Question: {input}
-Thought:{agent_scratchpad}"""
+    def _build_react_prompt(
+        self,
+        user_input: str,
+        employee_id: str,
+        history: list[dict[str, str]] | None,
+        scratchpad: str,
+    ) -> str:
+        tool_lines = [
+            f"- {tool_name}: {TOOL_DESCRIPTIONS.get(tool_name, raw_tool.description)}"
+            for tool_name, raw_tool in self.raw_tools.items()
+        ]
+        return (
+            "Bạn phải trả lời đúng một trong hai format dưới đây.\n\n"
+            "Format 1:\n"
+            "Thought: <lý do>\n"
+            "Action: <tool_name>\n"
+            "Action Input: <JSON object>\n\n"
+            "Format 2:\n"
+            "Thought: <lý do>\n"
+            "Final Answer: <câu trả lời tiếng Việt>\n\n"
+            "Tools:\n"
+            f"{chr(10).join(tool_lines)}\n\n"
+            "Quy tắc:\n"
+            "- Sau khi đã có Observation đủ dùng, phải trả Final Answer.\n"
+            "- Không được tự bịa dữ liệu HR, nhân viên, phép, task.\n"
+            "- Nếu Observation có requires_confirmation=true, Final Answer phải chính là message đó.\n"
+            "- Không được tạo Observation giả.\n\n"
+            f"Chat history:\n{self._format_history(history) or '(trống)'}\n\n"
+            f"Question:\n{self._build_user_prompt(user_input, employee_id, history)}\n\n"
+            f"{scratchpad}"
         )
 
     def _system_prompt(self, employee_id: str, role: str) -> str:
@@ -256,6 +265,40 @@ Rules:
             except (ValueError, SyntaxError):
                 return {}
             return parsed if isinstance(parsed, dict) else {}
+
+    def _parse_react_output(self, content: str) -> dict[str, str]:
+        thought_match = re.search(r"Thought:\s*(.*?)(?=\n(?:Action|Final Answer):|\Z)", content, re.DOTALL)
+        action_match = re.search(r"Action:\s*([A-Za-z_][A-Za-z0-9_]*)", content)
+        action_input_match = re.search(r"Action Input:\s*(\{.*\})", content, re.DOTALL)
+        final_match = re.search(r"Final Answer:\s*(.*)", content, re.DOTALL)
+        return {
+            "thought": thought_match.group(1).strip() if thought_match else "",
+            "action": action_match.group(1).strip() if action_match else "",
+            "action_input": action_input_match.group(1).strip() if action_input_match else "{}",
+            "final_answer": final_match.group(1).strip() if final_match else "",
+        }
+
+    def _is_failed_observation(self, observation: Any) -> bool:
+        if not isinstance(observation, dict):
+            return False
+        if observation.get("error"):
+            return True
+        return observation.get("ok") is False
+
+    def _format_scratchpad_step(
+        self,
+        thought: str,
+        tool_name: str,
+        action_input: str,
+        observation: str,
+    ) -> str:
+        thought_text = thought or "Tôi cần dùng tool để lấy dữ liệu."
+        return (
+            f"Thought: {thought_text}\n"
+            f"Action: {tool_name}\n"
+            f"Action Input: {action_input}\n"
+            f"Observation: {observation}\n\n"
+        )
 
     def _confirmation_message(self, tool_name: str, args: dict[str, Any]) -> str:
         if tool_name == "Create_Leave_Request":
