@@ -1,31 +1,65 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f4ed;
-  --foreground: #1c1c1c;
-  --muted: #5f5f5d;
-  --border: #eceae4;
-  --border-interactive: rgba(28, 28, 28, 0.4);
-  --ring: rgba(59, 130, 246, 0.5);
-  --focus-shadow: rgba(0, 0, 0, 0.1) 0px 4px 12px;
-  --button-inset: rgba(255, 255, 255, 0.2) 0px 0.5px 0px 0px inset,
-    rgba(0, 0, 0, 0.2) 0px 0px 0px 0.5px inset,
-    rgba(0, 0, 0, 0.05) 0px 1px 2px 0px;
+  /* Brand */
+  --primary: #0052ff;
+  --primary-active: #003ecc;
+  --primary-disabled: #a8b8cc;
+
+  /* Ink & Text */
+  --ink: #0a0b0d;
+  --body: #5b616e;
+  --body-strong: #0a0b0d;
+  --muted: #7c828a;
+  --muted-soft: #a8acb3;
+
+  /* Surfaces */
+  --canvas: #ffffff;
+  --surface-soft: #f7f7f7;
+  --surface-card: #ffffff;
+  --surface-strong: #eef0f3;
+  --surface-dark: #0a0b0d;
+  --surface-dark-elevated: #16181c;
+
+  /* On colors */
+  --on-primary: #ffffff;
+  --on-dark: #ffffff;
+  --on-dark-soft: #a8acb3;
+
+  /* Hairlines */
+  --hairline: #dee1e6;
+  --hairline-soft: #eef0f3;
+
+  /* Semantic */
+  --semantic-up: #05b169;
+  --semantic-down: #cf202f;
+  --accent-yellow: #f4b000;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-active: var(--primary-active);
+  --color-primary-disabled: var(--primary-disabled);
+  --color-ink: var(--ink);
+  --color-body: var(--body);
   --color-muted: var(--muted);
-  --color-border: var(--border);
-  --color-border-interactive: var(--border-interactive);
-  --color-ring: var(--ring);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-muted-soft: var(--muted-soft);
+  --color-canvas: var(--canvas);
+  --color-surface-soft: var(--surface-soft);
+  --color-surface-strong: var(--surface-strong);
+  --color-surface-dark: var(--surface-dark);
+  --color-surface-dark-elevated: var(--surface-dark-elevated);
+  --color-on-primary: var(--on-primary);
+  --color-on-dark: var(--on-dark);
+  --color-hairline: var(--hairline);
+  --color-hairline-soft: var(--hairline-soft);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-inter-tight);
+  --font-heading: var(--font-manrope);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-inter), -apple-system, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
