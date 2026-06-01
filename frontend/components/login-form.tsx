@@ -6,17 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Envelope, Lock, Eye, EyeSlash, ArrowRight } from "phosphor-react";
 import { toast } from "sonner";
-import employeesData from "@/data/employees.json";
+import { login, LoginResponse } from "@/lib/api";
 
 interface LoginFormProps {
-  onLoginSuccess: (user: {
-    employee_id: string;
-    full_name: string;
-    email: string;
-    role: string;
-    department: string;
-    position: string;
-  }) => void;
+  onLoginSuccess: (user: LoginResponse) => void;
 }
 
 export function LoginForm({ onLoginSuccess }: LoginFormProps) {
@@ -25,34 +18,23 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    setTimeout(() => {
-      const user = employeesData.employees.find(
-        (emp) => emp.email === email && emp.password === password
-      );
-
-      if (user) {
-        toast.success("Đăng nhập thành công!", {
-          description: `Chào mừng ${user.full_name}`,
-        });
-        onLoginSuccess({
-          employee_id: user.employee_id,
-          full_name: user.full_name,
-          email: user.email,
-          role: user.role,
-          department: user.department,
-          position: user.position,
-        });
-      } else {
-        toast.error("Đăng nhập thất bại", {
-          description: "Email hoặc mật khẩu không đúng",
-        });
-      }
+    try {
+      const user = await login(email, password);
+      toast.success("Đăng nhập thành công!", {
+        description: `Chào mừng ${user.full_name}`,
+      });
+      onLoginSuccess(user);
+    } catch (error) {
+      toast.error("Đăng nhập thất bại", {
+        description: error instanceof Error ? error.message : "Lỗi không xác định",
+      });
+    } finally {
       setIsLoading(false);
-    }, 500);
+    }
   };
 
   return (

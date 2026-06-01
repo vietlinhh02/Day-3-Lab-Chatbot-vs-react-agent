@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,7 +19,6 @@ import {
   SortableContext,
   verticalListSortingStrategy,
   useSortable,
-  arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
@@ -33,111 +32,13 @@ import {
   DotsSixVertical,
 } from "phosphor-react";
 import { getDicebearAvatar } from "@/lib/avatar";
+import { getTasks, updateTask, Task as ApiTask } from "@/lib/api";
 
 type TaskStatus = "todo" | "in_progress" | "review" | "done";
 
-interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: TaskStatus;
-  priority: "low" | "medium" | "high";
-  assignee: string;
-  assigneeEmail: string;
-  dueDate: string;
-  tags: string[];
+interface Task extends ApiTask {
+  parsedTags: string[];
 }
-
-const initialTasks: Task[] = [
-  {
-    id: "T-001",
-    title: "Cập nhật chính sách nghỉ phép 2026",
-    description: "Soạn thảo và phê duyệt chính sách nghỉ phép mới cho năm 2026",
-    status: "in_progress",
-    priority: "high",
-    assignee: "Lê Thị Hương",
-    assigneeEmail: "hr@example.com",
-    dueDate: "2026-06-15",
-    tags: ["HR", "Chính sách"],
-  },
-  {
-    id: "T-002",
-    title: "Phê duyệt đơn nghỉ phép tháng 6",
-    description: "Xem xét và phê duyệt các đơn nghỉ phép còn chờ duyệt",
-    status: "todo",
-    priority: "high",
-    assignee: "Trần Minh Quân",
-    assigneeEmail: "manager@example.com",
-    dueDate: "2026-06-10",
-    tags: ["Phê duyệt"],
-  },
-  {
-    id: "T-003",
-    title: "Onboarding nhân viên mới E009",
-    description: "Hoàn tất quy trình onboarding cho nhân viên mới phòng Marketing",
-    status: "todo",
-    priority: "medium",
-    assignee: "Lê Thị Hương",
-    assigneeEmail: "hr@example.com",
-    dueDate: "2026-06-12",
-    tags: ["Onboarding"],
-  },
-  {
-    id: "T-004",
-    title: "Đánh giá hiệu suất Q2",
-    description: "Tổng hợp đánh giá hiệu suất quý 2 cho phòng Engineering",
-    status: "review",
-    priority: "medium",
-    assignee: "Trần Minh Quân",
-    assigneeEmail: "manager@example.com",
-    dueDate: "2026-06-30",
-    tags: ["Đánh giá"],
-  },
-  {
-    id: "T-005",
-    title: "Cập nhật sổ tay nhân sự",
-    description: "Thêm mục quy định về làm việc hybrid vào sổ tay",
-    status: "done",
-    priority: "low",
-    assignee: "Lê Thị Hương",
-    assigneeEmail: "hr@example.com",
-    dueDate: "2026-06-05",
-    tags: ["Tài liệu"],
-  },
-  {
-    id: "T-006",
-    title: "Setup team building Q3",
-    description: "Lên kế hoạch và ngân sách cho hoạt động team building Q3",
-    status: "todo",
-    priority: "low",
-    assignee: "Nguyễn Thị Mai",
-    assigneeEmail: "mai@example.com",
-    dueDate: "2026-07-01",
-    tags: ["Sự kiện"],
-  },
-  {
-    id: "T-007",
-    title: "Triển khai hệ thống chấm công mới",
-    description: "Test và deploy hệ thống chấm công v2 cho toàn công ty",
-    status: "in_progress",
-    priority: "high",
-    assignee: "Phạm Đức Minh",
-    assigneeEmail: "minh@example.com",
-    dueDate: "2026-06-20",
-    tags: ["IT", "Dự án"],
-  },
-  {
-    id: "T-008",
-    title: "Hoàn tất báo cáo nhân sự tháng 5",
-    description: "Tổng hợp số liệu và gửi báo cáo cho ban giám đốc",
-    status: "done",
-    priority: "medium",
-    assignee: "Lê Thị Hương",
-    assigneeEmail: "hr@example.com",
-    dueDate: "2026-06-03",
-    tags: ["Báo cáo"],
-  },
-];
 
 const statusConfig: Record<
   TaskStatus,
@@ -156,6 +57,14 @@ const priorityConfig: Record<string, { label: string; color: string; bg: string 
 };
 
 const columns: TaskStatus[] = ["todo", "in_progress", "review", "done"];
+
+function parseTags(tags: string): string[] {
+  try {
+    return JSON.parse(tags);
+  } catch {
+    return [];
+  }
+}
 
 function DroppableColumn({
   status,
@@ -190,7 +99,7 @@ function SortableTaskCard({ task }: { task: Task }) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id });
+  } = useSortable({ id: task.task_id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -198,7 +107,8 @@ function SortableTaskCard({ task }: { task: Task }) {
     opacity: isDragging ? 0.4 : 1,
   };
 
-  const priority = priorityConfig[task.priority];
+  const priority = priorityConfig[task.priority] || priorityConfig.medium;
+  const tags = task.parsedTags;
 
   return (
     <div
@@ -215,7 +125,7 @@ function SortableTaskCard({ task }: { task: Task }) {
           >
             <DotsSixVertical size={16} />
           </button>
-          <span className="text-xs font-mono text-[#7c828a]">{task.id}</span>
+          <span className="text-xs font-mono text-[#7c828a]">{task.task_id}</span>
         </div>
         <span
           className="rounded-full px-2 py-0.5 text-xs font-semibold"
@@ -229,32 +139,32 @@ function SortableTaskCard({ task }: { task: Task }) {
         {task.title}
       </h4>
 
-      <div className="flex flex-wrap gap-1.5 pl-6">
-        {task.tags.map((tag) => (
-          <span
-            key={tag}
-            className="inline-flex items-center gap-1 rounded-full bg-[#f7f7f7] px-2 py-0.5 text-xs text-[#5b616e]"
-          >
-            <Tag size={10} />
-            {tag}
-          </span>
-        ))}
-      </div>
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pl-6">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="inline-flex items-center gap-1 rounded-full bg-[#f7f7f7] px-2 py-0.5 text-xs text-[#5b616e]"
+            >
+              <Tag size={10} />
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center justify-between pt-2 border-t border-[#eef0f3] pl-6">
         <div className="flex items-center gap-2">
           <img
-            src={getDicebearAvatar(task.assigneeEmail)}
-            alt={task.assignee}
+            src={getDicebearAvatar(task.assignee_id)}
+            alt={task.assignee_id}
             className="h-6 w-6 rounded-full bg-[#f7f7f7]"
           />
-          <span className="text-xs text-[#5b616e]">
-            {task.assignee.split(" ").pop()}
-          </span>
+          <span className="text-xs text-[#5b616e]">{task.assignee_id}</span>
         </div>
         <div className="flex items-center gap-1 text-xs text-[#7c828a]">
           <CalendarBlank size={12} />
-          {task.dueDate.slice(5)}
+          {task.due_date?.slice(5)}
         </div>
       </div>
     </div>
@@ -262,12 +172,12 @@ function SortableTaskCard({ task }: { task: Task }) {
 }
 
 function TaskCardOverlay({ task }: { task: Task }) {
-  const priority = priorityConfig[task.priority];
+  const priority = priorityConfig[task.priority] || priorityConfig.medium;
 
   return (
     <div className="rounded-xl bg-white border-2 border-[#0052ff] shadow-2xl p-4 space-y-3 w-[280px] rotate-3">
       <div className="flex items-start justify-between">
-        <span className="text-xs font-mono text-[#7c828a]">{task.id}</span>
+        <span className="text-xs font-mono text-[#7c828a]">{task.task_id}</span>
         <span
           className="rounded-full px-2 py-0.5 text-xs font-semibold"
           style={{ backgroundColor: priority.bg, color: priority.color }}
@@ -280,75 +190,103 @@ function TaskCardOverlay({ task }: { task: Task }) {
       </h4>
       <div className="flex items-center gap-2 pt-2 border-t border-[#eef0f3]">
         <img
-          src={getDicebearAvatar(task.assigneeEmail)}
-          alt={task.assignee}
+          src={getDicebearAvatar(task.assignee_id)}
+          alt={task.assignee_id}
           className="h-5 w-5 rounded-full bg-[#f7f7f7]"
         />
-        <span className="text-xs text-[#5b616e]">{task.assignee}</span>
+        <span className="text-xs text-[#5b616e]">{task.assignee_id}</span>
       </div>
     </div>
   );
 }
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [search, setSearch] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor)
   );
 
+  useEffect(() => {
+    loadTasks();
+  }, []);
+
+  async function loadTasks() {
+    try {
+      const data = await getTasks();
+      setTasks(data.map((t) => ({ ...t, parsedTags: parseTags(t.tags) })));
+    } catch (error) {
+      console.error("Failed to load tasks:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   const filtered = tasks.filter(
     (t) =>
       t.title.toLowerCase().includes(search.toLowerCase()) ||
-      t.assignee.toLowerCase().includes(search.toLowerCase())
+      t.assignee_id.toLowerCase().includes(search.toLowerCase())
   );
 
-  const activeTask = activeId ? tasks.find((t) => t.id === activeId) : null;
+  const activeTask = activeId ? tasks.find((t) => t.task_id === activeId) : null;
 
   function handleDragStart(event: DragStartEvent) {
     setActiveId(event.active.id as string);
   }
 
-  function handleDragEnd(event: DragEndEvent) {
+  async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveId(null);
 
     if (!over) return;
 
-    const activeTask = tasks.find((t) => t.id === active.id);
+    const activeTask = tasks.find((t) => t.task_id === active.id);
     if (!activeTask) return;
 
     const overId = over.id as string;
+    let newStatus: string | null = null;
 
-    // Check if dropped on a column
     if (columns.includes(overId as TaskStatus)) {
       if (activeTask.status !== overId) {
-        setTasks((prev) =>
-          prev.map((t) =>
-            t.id === active.id ? { ...t, status: overId as TaskStatus } : t
-          )
-        );
+        newStatus = overId;
       }
-      return;
+    } else {
+      const overTask = tasks.find((t) => t.task_id === overId);
+      if (overTask && activeTask.status !== overTask.status) {
+        newStatus = overTask.status;
+      }
     }
 
-    // Dropped on another task - move to that task's column
-    const overTask = tasks.find((t) => t.id === overId);
-    if (overTask && activeTask.status !== overTask.status) {
+    if (newStatus) {
       setTasks((prev) =>
         prev.map((t) =>
-          t.id === active.id ? { ...t, status: overTask.status } : t
+          t.task_id === active.id ? { ...t, status: newStatus! } : t
         )
       );
+
+      try {
+        await updateTask(active.id as string, { status: newStatus });
+      } catch (error) {
+        console.error("Failed to update task:", error);
+        loadTasks();
+      }
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#0052ff] border-t-transparent" />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-[#0a0b0d] tracking-tight">
@@ -362,7 +300,6 @@ export default function TasksPage() {
         </Button>
       </div>
 
-      {/* Filters */}
       <div className="flex items-center justify-between">
         <div className="relative w-64">
           <MagnifyingGlass
@@ -394,7 +331,6 @@ export default function TasksPage() {
         </div>
       </div>
 
-      {/* Board */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -408,7 +344,6 @@ export default function TasksPage() {
 
             return (
               <div key={col} className="space-y-4">
-                {/* Column header */}
                 <div
                   className="flex items-center gap-2 rounded-xl px-4 py-3"
                   style={{ backgroundColor: status.bg }}
@@ -425,14 +360,13 @@ export default function TasksPage() {
                   </span>
                 </div>
 
-                {/* Column content */}
                 <DroppableColumn status={col}>
                   <SortableContext
-                    items={columnTasks.map((t) => t.id)}
+                    items={columnTasks.map((t) => t.task_id)}
                     strategy={verticalListSortingStrategy}
                   >
                     {columnTasks.map((task) => (
-                      <SortableTaskCard key={task.id} task={task} />
+                      <SortableTaskCard key={task.task_id} task={task} />
                     ))}
                   </SortableContext>
                 </DroppableColumn>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   CalendarBlank,
@@ -10,87 +10,7 @@ import {
   ArrowRight,
 } from "phosphor-react";
 import { getDicebearAvatar } from "@/lib/avatar";
-
-const leaveRequests = [
-  {
-    id: "LR-1024",
-    employee: "Nguyễn Văn An",
-    email: "an@example.com",
-    type: "sick_leave",
-    typeLabel: "Nghỉ ốm",
-    startDate: "2026-06-08",
-    endDate: "2026-06-09",
-    days: 2,
-    reason: "Sốt cao",
-    status: "submitted",
-    submittedAt: "2 giờ trước",
-  },
-  {
-    id: "LR-1023",
-    employee: "Trần Thị Bình",
-    email: "binh@example.com",
-    type: "annual_leave",
-    typeLabel: "Phép năm",
-    startDate: "2026-06-10",
-    endDate: "2026-06-12",
-    days: 3,
-    reason: "Về quê",
-    status: "approved",
-    submittedAt: "1 ngày trước",
-  },
-  {
-    id: "LR-1022",
-    employee: "Phạm Đức Minh",
-    email: "minh@example.com",
-    type: "annual_leave",
-    typeLabel: "Phép năm",
-    startDate: "2026-06-15",
-    endDate: "2026-06-15",
-    days: 1,
-    reason: "Việc cá nhân",
-    status: "submitted",
-    submittedAt: "1 ngày trước",
-  },
-  {
-    id: "LR-1021",
-    employee: "Hoàng Văn Dũng",
-    email: "dung@example.com",
-    type: "sick_leave",
-    typeLabel: "Nghỉ ốm",
-    startDate: "2026-06-05",
-    endDate: "2026-06-06",
-    days: 2,
-    reason: "Cảm cúm",
-    status: "approved",
-    submittedAt: "3 ngày trước",
-  },
-  {
-    id: "LR-1020",
-    employee: "Vũ Thị Hoa",
-    email: "hoa@example.com",
-    type: "annual_leave",
-    typeLabel: "Phép năm",
-    startDate: "2026-06-03",
-    endDate: "2026-06-04",
-    days: 2,
-    reason: "Đi du lịch",
-    status: "rejected",
-    submittedAt: "5 ngày trước",
-  },
-  {
-    id: "LR-1019",
-    employee: "Nguyễn Văn An",
-    email: "an@example.com",
-    type: "annual_leave",
-    typeLabel: "Phép năm",
-    startDate: "2026-05-28",
-    endDate: "2026-05-28",
-    days: 1,
-    reason: "Việc gia đình",
-    status: "cancelled",
-    submittedAt: "1 tuần trước",
-  },
-];
+import { getLeaveRequests, LeaveRequest } from "@/lib/api";
 
 const statusConfig: Record<
   string,
@@ -123,7 +43,24 @@ const statusConfig: Record<
 };
 
 export default function LeavePage() {
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [filter, setFilter] = useState("all");
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadLeaveRequests();
+  }, []);
+
+  async function loadLeaveRequests() {
+    try {
+      const data = await getLeaveRequests();
+      setLeaveRequests(data);
+    } catch (error) {
+      console.error("Failed to load leave requests:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   const filters = [
     { value: "all", label: "Tất cả" },
@@ -165,9 +102,16 @@ export default function LeavePage() {
     },
   ];
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#0052ff] border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-[#0a0b0d] tracking-tight">
@@ -183,7 +127,6 @@ export default function LeavePage() {
         </Button>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
           <div
@@ -206,7 +149,6 @@ export default function LeavePage() {
         ))}
       </div>
 
-      {/* Filters */}
       <div className="flex gap-2">
         {filters.map((f) => (
           <button
@@ -223,7 +165,6 @@ export default function LeavePage() {
         ))}
       </div>
 
-      {/* Leave requests table */}
       <div className="rounded-2xl bg-white border border-[#eef0f3] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -251,52 +192,50 @@ export default function LeavePage() {
             </thead>
             <tbody>
               {filtered.map((req) => {
-                const status = statusConfig[req.status];
+                const status = statusConfig[req.status] || statusConfig.submitted;
                 const StatusIcon = status.icon;
                 return (
                   <tr
-                    key={req.id}
+                    key={req.request_id}
                     className="border-b border-[#eef0f3] last:border-0 hover:bg-[#f7f7f7]/50"
                   >
                     <td className="px-6 py-4">
                       <span className="text-sm font-medium text-[#0052ff]">
-                        {req.id}
+                        {req.request_id}
                       </span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <img
-                          src={getDicebearAvatar(req.email)}
-                          alt={req.employee}
+                          src={getDicebearAvatar(req.employee_id)}
+                          alt={req.employee_id}
                           className="h-8 w-8 rounded-full bg-[#f7f7f7]"
                         />
-                        <div>
-                          <p className="text-sm font-medium text-[#0a0b0d]">
-                            {req.employee}
-                          </p>
-                          <p className="text-xs text-[#7c828a]">
-                            {req.submittedAt}
-                          </p>
-                        </div>
+                        <span className="text-sm text-[#0a0b0d]">
+                          {req.employee_id}
+                        </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm text-[#0a0b0d]">
-                        {req.typeLabel}
+                        {req.type === "sick_leave"
+                          ? "Nghỉ ốm"
+                          : req.type === "annual_leave"
+                          ? "Phép năm"
+                          : req.type}
                       </span>
                       <p className="text-xs text-[#7c828a]">{req.reason}</p>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-[#0a0b0d]">
-                          {req.startDate}
+                          {req.start_date}
                         </span>
                         <ArrowRight size={14} className="text-[#7c828a]" />
                         <span className="text-sm text-[#0a0b0d]">
-                          {req.endDate}
+                          {req.end_date}
                         </span>
                       </div>
-                      <p className="text-xs text-[#7c828a]">{req.days} ngày</p>
                     </td>
                     <td className="px-6 py-4">
                       <span
