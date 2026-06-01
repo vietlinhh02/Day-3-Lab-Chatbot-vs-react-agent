@@ -11,9 +11,9 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/ai_lab"
 
-    DEFAULT_PROVIDER: str = "openai"
+    DEFAULT_PROVIDER: str = "ollama"
     LOG_LEVEL: str = "INFO"
-    MAX_AGENT_STEPS: int = 6
+    MAX_AGENT_STEPS: int = 4
 
     model_config = {
         "env_file": ".env",

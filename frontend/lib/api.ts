@@ -217,13 +217,29 @@ export async function sendChatMessage(
   employeeId: string = "current_user",
   role: string = "employee"
 ): Promise<ChatResponse> {
-  return fetchAPI<ChatResponse>("/chat", {
-    method: "POST",
-    body: JSON.stringify({
-      message,
-      session_id: sessionId,
-      employee_id: employeeId,
-      role,
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+
+  try {
+    const res = await fetch(`${API_BASE}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        session_id: sessionId,
+        employee_id: employeeId,
+        role,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: "Lỗi không xác định" }));
+      throw new Error(error.detail || `HTTP ${res.status}`);
+    }
+
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }

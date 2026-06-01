@@ -11,7 +11,8 @@ from app.core.openai_provider import OpenAIProvider
 from app.core.ollama_provider import OllamaProvider
 from app.models.schemas import ChatRequest, ChatResponse, SessionInfo
 from app.telemetry.metrics import tracker
-from app.tools import get_hr_tools
+from app.tools import get_leave_request_tools, get_user_management_tools, get_task_tools
+from app.tools.hr_tools import search_hr_policy, _tool
 
 router = APIRouter()
 
@@ -44,9 +45,11 @@ def chat(request: ChatRequest):
     if session_id not in session_state:
         session_state[session_id] = {}
 
+    hr_policy_tool = _tool("Search_HR_Policy", "Tra cứu chính sách nhân sự từ sổ tay công ty.", search_hr_policy)
+    all_tools = [hr_policy_tool] + get_leave_request_tools() + get_user_management_tools() + get_task_tools()
     agent = ReActAgent(
         llm=provider,
-        tools=get_hr_tools(),
+        tools=all_tools,
         max_steps=settings.MAX_AGENT_STEPS,
     )
     result = agent.run(
